@@ -1,0 +1,299 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ATLAS — lo propio de la app
+   Prefijo `at-`. Todo lo que no está acá es de Opal (`op-`) y no se toca.
+
+   El mapa es la pieza que justifica el vidrio: un disco es una hoja
+   esmerilada directo sobre la niebla (fuera de cualquier scroller, así el
+   backdrop tiene qué muestrear), y ADENTRO todo es relleno translúcido sin
+   blur: proyectos como hojas de luz, capas como estratos más tenues. Cada
+   nivel se ve a través del anterior. La luz, como en todo Opal, talla: la
+   celda seleccionada es la más honda, con el canto vivo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── El mapa ─────────────────────────────────────────────────────────────── */
+
+.at-mapa {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 var(--op-6) var(--op-4);
+  user-select: none;
+}
+
+.at-disco {
+  position: absolute;
+  border-radius: var(--op-r-lg);
+  background: var(--op-s1);
+  backdrop-filter: var(--op-glass);
+  box-shadow: var(--op-sheet), var(--op-e2);
+  transition: left var(--op-t-4) var(--op-ease), top var(--op-t-4) var(--op-ease),
+              width var(--op-t-4) var(--op-ease), height var(--op-t-4) var(--op-ease);
+}
+.at-disco__label {
+  position: absolute;
+  left: 10px;
+  top: 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: var(--op-2);
+  font-size: var(--op-fs-10);
+  font-weight: var(--op-w-semi);
+  letter-spacing: var(--op-track-caps);
+  text-transform: uppercase;
+  color: var(--op-text-3);
+  white-space: nowrap;
+}
+.at-disco__label .op-icon { width: 12px; height: 12px; color: var(--op-text-4); }
+.at-disco__label .op-num { color: var(--op-text-4); font-weight: var(--op-w-regular); letter-spacing: 0; text-transform: none; }
+
+/* La celda de un proyecto: hoja de luz, sin blur (adentro de una hoja). */
+.at-celda {
+  position: absolute;
+  border-radius: var(--op-r-sm);
+  background: var(--op-s2);
+  box-shadow: var(--op-sheet);
+  overflow: hidden;
+  cursor: pointer;
+  transition: left var(--op-t-4) var(--op-ease), top var(--op-t-4) var(--op-ease),
+              width var(--op-t-4) var(--op-ease), height var(--op-t-4) var(--op-ease),
+              background-color var(--op-t-2) var(--op-ease-soft), box-shadow var(--op-t-2) var(--op-ease-soft),
+              opacity var(--op-t-3) var(--op-ease), transform var(--op-t-3) var(--op-ease);
+}
+.at-celda:hover { background: var(--op-s3); }
+.at-celda.is-selected {
+  background: var(--op-deep);
+  box-shadow: inset 0 0 0 1px var(--op-rim-2), inset 0 1px 0 var(--op-rim);
+}
+/* Entra aflorando (Opal sube en Y), y se va igual pero en reversa. */
+.at-celda.is-nueva { opacity: 0; transform: translateY(6px) scale(.98); }
+.at-celda[data-state="closing"] { opacity: 0; transform: translateY(4px) scale(.98); }
+
+/* Las capas adentro: estratos, posicionadas relativas a la celda. */
+.at-celda__capas { position: absolute; inset: 0; }
+/* Las capas adentro: estratos. Código es lo más luminoso —lo que Fran escribió—,
+   las dependencias casi nada, git se hunde. Se leen a través de la celda. */
+.at-capa {
+  position: absolute;
+  border-radius: 3px;
+  transition: left var(--op-t-4) var(--op-ease), top var(--op-t-4) var(--op-ease),
+              width var(--op-t-4) var(--op-ease), height var(--op-t-4) var(--op-ease);
+}
+.at-capa[data-capa="codigo"] { background: rgb(255 255 255 / .10); }
+.at-capa[data-capa="build"]  { background: rgb(255 255 255 / .045); }
+.at-capa[data-capa="deps"]   { background: rgb(255 255 255 / .018); }
+.at-capa[data-capa="git"]    { background: rgb(0 0 0 / .18); }
+
+/* El rótulo flota sobre los estratos, con un velo hundido para que se lea
+   caiga donde caiga. */
+.at-celda__label {
+  position: absolute;
+  left: 0; top: 0;
+  max-width: 100%;
+  padding: 4px 7px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgb(0 0 0 / .22), transparent);
+  border-top-left-radius: inherit;
+}
+.at-celda__nombre {
+  font-size: var(--op-fs-12);
+  font-weight: var(--op-w-medium);
+  color: var(--op-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+.at-celda__tam {
+  font-family: var(--op-mono);
+  font-size: var(--op-fs-10);
+  color: var(--op-text-3);
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.at-celda.is-chica .at-celda__tam { display: none; }
+.at-celda.is-minima .at-celda__label { display: none; }
+.at-celda.is-selected .at-celda__nombre { color: var(--op-text); }
+
+/* El acento, como punto: la instalada quedó vieja. Un solo color en pantalla,
+   y significa una sola cosa. */
+.at-celda__punto {
+  position: absolute;
+  right: 6px; top: 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--op-accent);
+  box-shadow: 0 0 0 3px rgb(var(--op-accent-rgb) / .18);
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity var(--op-t-3) var(--op-ease), transform var(--op-t-3) var(--op-ease);
+}
+.at-celda[data-estado="desfasada"] .at-celda__punto { opacity: 1; transform: none; }
+
+/* Estado vacío del mapa (antes del primer escaneo): ocupa el mismo lugar. */
+.at-mapa__vacio {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* La leyenda vive en el encabezado de la vista. */
+.at-leyenda {
+  display: flex;
+  align-items: center;
+  gap: var(--op-3);
+  font-size: var(--op-fs-11);
+  color: var(--op-text-3);
+  user-select: none;
+}
+.at-leyenda__item { display: inline-flex; align-items: center; gap: 6px; }
+.at-leyenda__sw {
+  width: 10px; height: 10px;
+  border-radius: 3px;
+  box-shadow: var(--op-hairline);
+  background: var(--op-s2);
+}
+.at-leyenda__sw[data-capa="codigo"] { background: rgb(255 255 255 / .22); }
+.at-leyenda__sw[data-capa="build"]  { background: rgb(255 255 255 / .11); }
+.at-leyenda__sw[data-capa="deps"]   { background: rgb(255 255 255 / .05); }
+.at-leyenda__sw[data-capa="git"]    { background: rgb(0 0 0 / .32); }
+
+/* ── Estratos: la barra apilada del tamaño ───────────────────────────────────
+   Una sola barra con un segmento por capa; el ancho es la proporción. En el
+   inspector va grande, en la lista va en miniatura. */
+.at-estratos {
+  display: flex;
+  height: 6px;
+  border-radius: var(--op-r-pill);
+  overflow: hidden;
+  background: var(--op-sunken);
+  box-shadow: var(--op-hairline);
+}
+.at-estratos--mini { height: 3px; width: 56px; }
+.at-estratos__seg {
+  height: 100%;
+  flex: 0 0 auto;
+  transition: width var(--op-t-4) var(--op-ease);
+}
+.at-estratos__seg[data-capa="codigo"] { background: rgb(255 255 255 / .55); }
+.at-estratos__seg[data-capa="build"]  { background: rgb(255 255 255 / .28); }
+.at-estratos__seg[data-capa="deps"]   { background: rgb(255 255 255 / .12); }
+.at-estratos__seg[data-capa="git"]    { background: rgb(255 255 255 / .05); }
+
+/* Filas capa → bytes, debajo de la barra. */
+.at-capas {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  column-gap: var(--op-2);
+  row-gap: 5px;
+  font-size: var(--op-fs-12);
+  color: var(--op-text-2);
+  margin-top: var(--op-3);
+}
+.at-capas .op-num { color: var(--op-text-3); font-family: var(--op-mono); font-size: var(--op-fs-11); }
+
+/* ── Estado: el chip ───────────────────────────────────────────────────────── */
+.at-estado[data-estado="desfasada"] {
+  color: var(--op-text);
+  box-shadow: inset 0 0 0 1px var(--op-rim-2);
+  background: var(--op-deep);
+}
+.at-estado[data-estado="desfasada"] .op-icon { color: var(--op-accent); }
+.at-estado[data-estado="al-dia"] { color: var(--op-text-2); }
+.at-estado[data-estado="sin-instalar"],
+.at-estado[data-estado="no-aplica"] { color: var(--op-text-3); }
+
+/* ── Progreso del escaneo en la statusbar ──────────────────────────────────── */
+.at-progreso {
+  gap: var(--op-2);
+  opacity: 0;
+  transition: opacity var(--op-t-3) var(--op-ease);
+}
+.at-progreso[data-state="running"] { opacity: 1; }
+.at-progreso__meter { width: 90px; }
+
+/* ── Lista ─────────────────────────────────────────────────────────────────── */
+/* La tabla no puede ser más ancha que la vista: todo va en una línea, la
+   columna del commit se recorta a un ancho fijo, y si aun así no entra, el
+   contenedor scrollea a lo ancho (con la scrollbar propia). */
+#tabla-scroll { overflow-x: auto; }
+.at-tabla td, .at-tabla th { white-space: nowrap; }
+.at-tabla .op-tr { cursor: pointer; }
+.at-tabla .at-td-commit .op-truncate { display: inline-block; max-width: 168px; vertical-align: bottom; }
+/* Con el inspector abierto en una ventana chica no entra todo: la columna de
+   código es la primera en irse (está en el inspector), y el commit se acorta. */
+#tabla-scroll { container-type: inline-size; }
+@container (max-width: 860px) {
+  .at-tabla .at-col-codigo { display: none; }
+  .at-tabla .at-td-commit .op-truncate { max-width: 150px; }
+}
+@container (max-width: 720px) {
+  .at-tabla .at-td-commit .op-truncate { max-width: 110px; }
+  .at-estratos--mini { width: 48px; }
+}
+.at-tabla .at-ver .op-icon { width: 10px; height: 10px; color: var(--op-accent); }
+.at-tabla td:first-child { color: var(--op-text); font-weight: var(--op-w-medium); }
+.at-tabla .at-ver { font-family: var(--op-mono); font-size: var(--op-fs-11); letter-spacing: 0; }
+.at-tabla .at-ver--vieja { color: var(--op-text-3); }
+.at-tabla th.is-sorted { color: var(--op-text); }
+.at-tabla th .op-icon { width: 10px; height: 10px; vertical-align: -1px; margin-left: 3px; opacity: 0; transition: opacity var(--op-t-2) var(--op-ease), transform var(--op-t-2) var(--op-ease); }
+.at-tabla th.is-sorted .op-icon { opacity: 1; }
+.at-tabla th.is-sorted.is-desc .op-icon { transform: rotate(180deg); }
+.at-tabla .op-tr.is-selected td:first-child { box-shadow: inset 2px 0 0 var(--op-rim-2), inset 0 -1px 0 var(--op-line); }
+
+/* Un filtro activo se talla, no se pinta. */
+.at-filtros .op-btn.is-active { background: var(--op-deep); box-shadow: inset 0 0 0 1px var(--op-rim); color: var(--op-text); }
+.at-filtros { display: flex; align-items: center; gap: var(--op-2); margin-bottom: var(--op-3); flex-wrap: wrap; }
+.at-filtros .op-inputwrap { width: 240px; }
+.at-code { font-family: var(--op-mono); font-size: .92em; letter-spacing: 0; }
+
+/* ── Inspector ─────────────────────────────────────────────────────────────── */
+.at-ruta {
+  font-family: var(--op-mono);
+  font-size: var(--op-fs-11);
+  color: var(--op-text-3);
+  word-break: break-all;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+.at-commit {
+  font-size: var(--op-fs-12);
+  color: var(--op-text-2);
+  line-height: 1.5;
+  user-select: text;
+}
+.at-commit__hash { font-family: var(--op-mono); font-size: var(--op-fs-11); color: var(--op-text-3); letter-spacing: 0; }
+.at-inspector-blk { padding: var(--op-3) 0; box-shadow: inset 0 -1px 0 var(--op-line); }
+.at-inspector-blk:last-child { box-shadow: none; }
+.at-inspector-blk .op-eyebrow { display: block; margin-bottom: var(--op-2); }
+
+/* Comparación instalada / repo: dos cifras enfrentadas. */
+.at-versus {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--op-2);
+  padding: var(--op-3);
+  border-radius: var(--op-r-md);
+  background: var(--op-sunken);
+  box-shadow: var(--op-hairline);
+}
+.at-versus__lado { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.at-versus__lado:last-child { text-align: right; }
+.at-versus__v { font-family: var(--op-mono); font-size: var(--op-fs-15); color: var(--op-text); letter-spacing: 0; }
+.at-versus__k { font-size: var(--op-fs-10); letter-spacing: var(--op-track-caps); text-transform: uppercase; color: var(--op-text-4); }
+.at-versus .op-icon { color: var(--op-text-4); }
+.at-versus[data-estado="desfasada"] { box-shadow: inset 0 0 0 1px var(--op-rim); background: var(--op-deep); }
+.at-versus[data-estado="desfasada"] .op-icon { color: var(--op-accent); }
+
+/* Resumen cuando no hay nada seleccionado: los discos y sus totales. */
+.at-resumen { display: flex; flex-direction: column; gap: var(--op-4); }
+.at-resumen__disco { display: flex; flex-direction: column; gap: 6px; }
+.at-resumen__cab { display: flex; align-items: baseline; gap: var(--op-2); }
+.at-resumen__cab .op-icon { width: 12px; height: 12px; color: var(--op-text-4); align-self: center; }
+.at-resumen__cab .op-num { margin-left: auto; font-family: var(--op-mono); font-size: var(--op-fs-11); color: var(--op-text-3); letter-spacing: 0; }

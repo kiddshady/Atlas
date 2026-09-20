@@ -10,6 +10,7 @@ import { Icons } from '../icons.js';
 import { Toast, Modal } from '../overlays.js';
 import { exit } from '../motion.js';
 import { S, guardarAjustes } from '../estado.js';
+import { checkUpdates } from '../actualizaciones.js';
 
 const api = window.opal;
 
@@ -63,6 +64,12 @@ export function viewAjustes() {
         </div>
 
         <div class="op-section">
+          <div class="op-section__head"><span class="op-section__title">Actualizaciones</span></div>
+          <p class="op-meta" style="margin:0 0 12px;line-height:1.6">Atlas busca sola al arrancar y avisa si hay una versión nueva. No descarga nada sin que digas que sí.</p>
+          <button class="op-btn op-btn--secondary op-flashable" id="btn-update"><i data-icon="retry"></i> Buscar actualizaciones</button>
+        </div>
+
+        <div class="op-section">
           <div class="op-section__head"><span class="op-section__title">Acerca de</span></div>
           <div class="op-card"><div class="op-card__body">
             <div class="op-kv">
@@ -78,6 +85,7 @@ export function viewAjustes() {
     </div>`);
 
   const raices = document.getElementById('raices');
+  document.getElementById('btn-update').addEventListener('click', checkUpdates);
 
   document.getElementById('agregar-raiz').addEventListener('click', async () => {
     const ruta = await attempt(() => api.atlas.elegirCarpeta(), { errorTitle: 'No se pudo abrir el selector' });

@@ -54,6 +54,19 @@ contextBridge.exposeInMainWorld('opal', {
     },
   },
 
+  /** Actualizaciones: el estado viene entero en cada cambio. */
+  update: {
+    estado: () => call('update:estado'),
+    buscar: (opts) => call('update:buscar', opts),
+    descargar: () => call('update:descargar'),
+    instalar: () => call('update:instalar'),
+    onCambio: (cb) => {
+      const handler = (_e, estado) => cb(estado);
+      ipcRenderer.on('update:cambio', handler);
+      return () => ipcRenderer.off('update:cambio', handler);
+    },
+  },
+
   settings: {
     get: () => call('settings:get'),
     save: (patch) => call('settings:save', patch),

@@ -13,3 +13,6 @@ data/
 
 # Las fotos de test/captura.cjs: se regeneran, no se versionan.
 capturas/
+
+# Hojas de control del ícono
+.shots/

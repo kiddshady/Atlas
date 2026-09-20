@@ -20,10 +20,26 @@ niveles se ven unos a través de otros.
 
 ```
 npm run dev        # con la consola del renderer en la terminal
-npm test           # tokens + store + formato + treemap + escáner (node pelado)
-npm run smoke      # monta el renderer con Electron y lo recorre (90 chequeos)
+npm test           # tokens + store + formato + treemap + escáner + actualizador (node pelado)
+npm run smoke      # monta el renderer con Electron y lo recorre (91 chequeos)
 npm run capturas   # fotografía cada vista de la app real en capturas/
 ```
+
+## Instalar y actualizar
+
+Los releases están en [GitHub](https://github.com/kiddshady/Atlas/releases):
+**Setup** se instala y se actualiza solo (busca al arrancar, avisa si hay
+versión nueva y no descarga nada sin permiso; la versión de la statusbar es
+el botón); **Portable** es un exe suelto que no se actualiza.
+
+```
+npm run icons      # hornea build/icon.ico desde el código (control en .shots/icons.png)
+npm run build      # Setup + Portable en dist/, sin publicar
+npm run release    # compila y publica el release (antes: $env:GH_TOKEN = gh auth token)
+```
+
+Para publicar: bump de `version` en package.json en un commit
+`chore(release): vX.Y.Z`, y después `npm run release`.
 
 ## Las vistas
 

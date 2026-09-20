@@ -297,3 +297,8 @@
 .at-resumen__cab { display: flex; align-items: baseline; gap: var(--op-2); }
 .at-resumen__cab .op-icon { width: 12px; height: 12px; color: var(--op-text-4); align-self: center; }
 .at-resumen__cab .op-num { margin-left: auto; font-family: var(--op-mono); font-size: var(--op-fs-11); color: var(--op-text-3); letter-spacing: 0; }
+
+/* ── Versión en la statusbar: es el botón del actualizador ─────────────────── */
+.at-version { cursor: pointer; transition: color var(--op-t-2) var(--op-ease); }
+.at-version:hover { color: var(--op-text); }
+.at-version.is-pending .op-statusbar__value { color: var(--op-accent); }

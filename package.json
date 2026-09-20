@@ -4,16 +4,73 @@
   "version": "0.1.0",
   "description": "Atlas — mapa de los proyectos en C:\tools y S:\tools: cuánto ocupa cada uno y por qué, su git, y si la versión instalada quedó atrás del repo.",
   "main": "main.cjs",
-  "author": "Kidd Shady",
+  "author": "Kidd Shady · Umbrovex Systems <umbrovex@proton.me>",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node test/tokens.test.mjs && node test/store.test.mjs && node test/format.test.mjs && node test/treemap.test.mjs && node test/escaner.test.mjs",
+    "test": "node test/tokens.test.mjs && node test/store.test.mjs && node test/format.test.mjs && node test/treemap.test.mjs && node test/escaner.test.mjs && node test/actualizador.test.mjs",
     "smoke": "electron test/renderer.test.cjs",
-    "capturas": "electron test/captura.cjs"
+    "capturas": "electron test/captura.cjs",
+    "icons": "node tools/icons.mjs",
+    "build": "electron-builder --win --publish never",
+    "release": "electron-builder --win --publish always"
   },
   "devDependencies": {
-    "electron": "40.10.2"
+    "electron": "40.10.2",
+    "electron-builder": "^25.1.8"
+  },
+  "copyright": "Copyright © 2026 Kidd Shady · Umbrovex Systems",
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "homepage": "https://github.com/kiddshady/Atlas",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kiddshady/Atlas.git"
+  },
+  "build": {
+    "appId": "com.umbrovex.atlas",
+    "productName": "Atlas",
+    "copyright": "Copyright © 2026 Kidd Shady · Umbrovex Systems",
+    "directories": {
+      "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "kiddshady",
+      "repo": "Atlas",
+      "releaseType": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "src/**/*",
+      "renderer/**/*",
+      "build/icon.ico",
+      "build/icon.png",
+      "LICENSE",
+      "NOTICE",
+      "package.json",
+      "!data/**",
+      "!test/**",
+      "!docs/**",
+      "!tools/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    }
   }
 }

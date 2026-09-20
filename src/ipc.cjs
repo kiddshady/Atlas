@@ -18,6 +18,7 @@
 
 const { ipcMain, app, shell, dialog, BrowserWindow } = require('electron');
 const fs = require('fs');
+const actualizador = require('./actualizador.cjs');
 const path = require('path');
 const store = require('./store.cjs');
 const { escanear } = require('./escaneo.cjs');
@@ -95,6 +96,14 @@ function register() {
     dataDir: store.ROOT,
     electron: process.versions.electron,
   }));
+
+  /* ── Actualizaciones: el renderer pide, el main contesta con el estado
+     entero; los cambios espontáneos (progreso, error) llegan por
+     'update:cambio' (ver actualizador.cjs). ── */
+  handle('update:estado', () => actualizador.leer());
+  handle('update:buscar', (opts) => actualizador.buscar(opts));
+  handle('update:descargar', () => actualizador.descargar());
+  handle('update:instalar', () => actualizador.instalar());
 
   handle('settings:get', () => store.loadSettings());
   handle('settings:save', (patch) => store.saveSettings(patch));

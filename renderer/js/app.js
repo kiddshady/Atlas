@@ -21,6 +21,7 @@ import {
 import { viewMapa } from './vistas/mapa.js';
 import { viewLista } from './vistas/lista.js';
 import { viewAjustes } from './vistas/ajustes.js';
+import { wireUpdates, checkUpdates } from './actualizaciones.js';
 
 const api = window.opal;
 
@@ -162,6 +163,7 @@ function registerCommands() {
     { id: 'nav-desfasadas', group: 'Ir a', icon: 'stale', label: 'Desfasadas', run: () => Router.go('desfasadas') },
     { id: 'nav-piezas', group: 'Ir a', icon: 'layers', label: 'Piezas', run: () => Router.go('piezas') },
     { id: 'nav-ajustes', group: 'Ir a', icon: 'settings', label: 'Ajustes', run: () => Router.go('ajustes') },
+    { id: 'update', group: 'Sistema', icon: 'retry', label: 'Buscar actualizaciones', run: checkUpdates },
     ...lista().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({
       id: `p-${p.id}`, group: 'Proyecto', icon: p.tipo === 'electron' ? 'box' : 'folder', label: p.nombre,
       hint: p.tam ? fmtBytes(p.tam.total) : p.disco,
@@ -198,6 +200,7 @@ async function boot() {
   }
 
   escucharEscaneo();
+  wireUpdates();
   suscribir((que, extra) => {
     updateChrome();
     if (que === 'fin') {

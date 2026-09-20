@@ -35,6 +35,7 @@ const { app, BrowserWindow, ipcMain, screen, shell } = require('electron');
 const path = require('path');
 const ipc = require('./src/ipc.cjs');
 const store = require('./src/store.cjs');
+const actualizador = require('./src/actualizador.cjs');
 
 /* Color base de arranque. Tiene que coincidir con --op-bg de tokens.css.
    Como --op-bg es oklch y Electron solo entiende hex, el renderer se lo vuelve
@@ -106,6 +107,9 @@ function createWindow(state) {
     minHeight: MIN_H,
     frame: false,
     show: false,
+    // Empaquetada el ícono sale del exe; desde el repo, sin esto, la barra de
+    // tareas muestra el de Electron.
+    icon: path.join(__dirname, 'build', 'icon.ico'),
     paintWhenInitiallyHidden: true,
     backgroundColor: BG,
     webPreferences: {
@@ -179,6 +183,14 @@ ipcMain.on('win:set-bg', (_e, hex) => {
 app.whenReady().then(async () => {
   ipc.register();
   createWindow(await loadWindowState());
+
+  /* El actualizador se engancha a la ventana por función, no por referencia:
+     la ventana puede cerrarse y volver a crearse. La primera búsqueda es
+     silenciosa y espera a que la app ya esté en pantalla (y a que el escaneo
+     del arranque ya haya largado): si hay algo nuevo, el renderer lo avisa
+     con un toast; si no, no molesta. */
+  actualizador.iniciar(() => win);
+  setTimeout(() => actualizador.buscar({ manual: false }), 6000);
 });
 
 app.on('window-all-closed', () => {

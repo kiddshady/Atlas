@@ -1,7 +1,7 @@
 {
   "name": "atlas",
   "productName": "Atlas",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Atlas — mapa de los proyectos en C:\tools y S:\tools: cuánto ocupa cada uno y por qué, su git, y si la versión instalada quedó atrás del repo.",
   "main": "main.cjs",
   "author": "Kidd Shady · Umbrovex Systems <umbrovex@proton.me>",

@@ -3,9 +3,22 @@
    El treemap. Cada disco es una hoja de vidrio sobre la niebla; adentro, cada
    proyecto es una hoja de luz y, adentro de esa, sus capas. La geometría la
    da treemap.js; acá se concilia con el DOM: las celdas que ya existen se
-   MUEVEN a su lugar nuevo (transición), las nuevas afloran, las que se van
-   salen animadas. Repintar todo en cada evento del escaneo haría que el mapa
-   parpadee cuarenta veces por minuto.
+   MUEVEN a su lugar nuevo, las nuevas afloran, las que se van salen animadas.
+   Repintar todo en cada evento del escaneo haría que el mapa parpadee
+   cuarenta veces por minuto.
+
+   ── Cómo se mueven: FLIP ───────────────────────────────────────────────────
+   Las celdas y los estratos NO transicionan su geometría. Con 74 celdas y 300
+   estratos animando left/top/width/height a la vez, el navegador relayouteaba
+   el mapa entero en cada fotograma y el escaneo lo dejaba en 37 fps
+   (test/perf-mapa.cjs: 26,6 ms por frame en una pantalla de 13,3). La
+   geometría nueva se escribe de una, y el viaje se hace con `transform`, que
+   corre en el compositor sin tocar el layout: la celda arranca con la
+   transformación inversa —donde estaba, del tamaño que tenía— y la va
+   soltando. Como escalar la celda escalaría el texto, el rótulo se
+   contra-escala en los mismos fotogramas. Los discos son dos y siguen con
+   transición CSS: no cuestan, y las celdas viajan en coordenadas del disco,
+   así que su movimiento se suma sin contarse dos veces.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import Router from '../router.js';
@@ -22,6 +35,74 @@ const MEDIDAS = [
   { id: 'total', label: 'Total' },
   { id: 'codigo', label: 'Código' },
 ];
+
+/* ── El viaje de una celda ─────────────────────────────────────────────────
+   Duración y curva salen de los tokens (--op-t-4, --op-ease), así el mapa se
+   mueve igual que el resto de la app. La curva se muestrea en PASOS
+   fotogramas clave lineales: es lo que permite que el rótulo lleve en cada
+   instante la escala exactamente inversa a la de su celda. Con dos
+   animaciones con easing propio el producto no daría 1 y el texto ondularía. */
+
+const PASOS = 30;
+
+/** Resuelve una cubic-bezier CSS: x en [0,1] → y. */
+function bezier(x1, y1, x2, y2) {
+  const A = (a, b) => 1 - 3 * b + 3 * a;
+  const B = (a, b) => 3 * b - 6 * a;
+  const C = (a) => 3 * a;
+  const at = (t, a, b) => ((A(a, b) * t + B(a, b)) * t + C(a)) * t;
+  const pend = (t, a, b) => 3 * A(a, b) * t * t + 2 * B(a, b) * t + C(a);
+  return (x) => {
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const p = pend(t, x1, x2);
+      if (!p) break;
+      t -= (at(t, x1, x2) - x) / p;
+    }
+    return at(t, y1, y2);
+  };
+}
+
+function leerMovimiento() {
+  const cs = getComputedStyle(document.documentElement);
+  const dur = parseFloat(cs.getPropertyValue('--op-t-4')) || 420;
+  const m = cs.getPropertyValue('--op-ease').match(/cubic-bezier\(([^)]+)\)/);
+  const ease = m ? bezier(...m[1].split(',').map(Number)) : (x) => 1 - 2 ** (-10 * x);
+  return { dur, ease };
+}
+
+/** Rectángulo visual de `el` (con transform), relativo al de su padre. */
+function relativo(el, padre) {
+  const r = el.getBoundingClientRect();
+  return { x: r.left - padre.left, y: r.top - padre.top, w: r.width, h: r.height };
+}
+
+const viajes = new WeakMap();   // celda → su animación en curso
+
+/** Anima la celda desde el rectángulo `de` (visual) hasta `a` (ya escrito). */
+function viajar(c, de, a, { dur, ease }) {
+  if (!de || a.w < 1 || a.h < 1 || de.w < 1 || de.h < 1) return;
+  const dx = de.x - a.x; const dy = de.y - a.y;
+  const sx = de.w / a.w; const sy = de.h / a.h;
+  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(sx - 1) < 0.004 && Math.abs(sy - 1) < 0.004) return;
+
+  const celda = []; const rotulo = [];
+  for (let i = 0; i <= PASOS; i++) {
+    const e = ease(i / PASOS);
+    const kx = sx + (1 - sx) * e; const ky = sy + (1 - sy) * e;
+    celda.push({ transform: `translate(${dx * (1 - e)}px, ${dy * (1 - e)}px) scale(${kx}, ${ky})` });
+    rotulo.push({ transform: `scale(${1 / kx}, ${1 / ky})` });
+  }
+  /* Se cancela solo el viaje anterior, no `getAnimations()` entero: eso
+     cortaría la transición de opacidad de una celda que todavía está
+     aflorando y la haría aparecer de golpe. */
+  viajes.get(c)?.forEach((an) => an.cancel());
+  const label = c.querySelector('.at-celda__label');
+  viajes.set(c, [
+    c.animate(celda, { duration: dur, easing: 'linear' }),
+    label.animate(rotulo, { duration: dur, easing: 'linear' }),
+  ]);
+}
 
 export function viewMapa() {
   const n = S.proyectos.size;
@@ -42,6 +123,7 @@ export function viewMapa() {
   const mapa = document.getElementById('mapa');
   const discos = new Map();   // letra → elemento
   const celdas = new Map();   // id → elemento
+  const movimiento = leerMovimiento();
 
   /* Coalescer: los eventos del escaneo llegan de a varios por segundo y el
      ResizeObserver dispara en cada píxel de un arrastre. Un solo dibujo por frame. */
@@ -58,6 +140,17 @@ export function viewMapa() {
     const todos = lista();
     // Midiendo solo el código, la celda ENTERA es código: los estratos sobran.
     const { discos: layout } = nivelar(todos, rect, { valor: (p) => medidaDe(p), conCapas: S.medida === 'total' });
+
+    /* Dónde está cada celda AHORA, en pantalla y con su viaje a medio hacer,
+       relativa a su disco. Todas las lecturas van antes de la primera
+       escritura: un solo layout, no uno por celda. */
+    const previos = new Map();
+    const cajas = new Map();
+    for (const [id, c] of celdas) {
+      const d = c.parentElement;
+      if (!cajas.has(d)) cajas.set(d, d.getBoundingClientRect());
+      previos.set(id, relativo(c, cajas.get(d)));
+    }
 
     // Sin nada medible: o no hay escaneo, o todavía no llegó ningún tamaño.
     const vacio = mapa.querySelector('.at-mapa__vacio');
@@ -110,7 +203,9 @@ export function viewMapa() {
           celdas.set(p.id, c);
         }
         // La celda es hija del disco: sus coordenadas van relativas a él.
-        poner(c, { x: p.x - d.x, y: p.y - d.y, w: p.w, h: p.h });
+        const destino = { x: p.x - d.x, y: p.y - d.y, w: p.w, h: p.h };
+        poner(c, destino);
+        if (!nueva) viajar(c, previos.get(p.id), destino, movimiento);
         c.dataset.estado = p.estado || 'no-aplica';
         c.classList.toggle('is-selected', S.seleccion === p.id);
         c.classList.toggle('is-chica', p.h < 38 || p.w < 70);

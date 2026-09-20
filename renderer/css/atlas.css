@@ -55,9 +55,10 @@
   box-shadow: var(--op-sheet);
   overflow: hidden;
   cursor: pointer;
-  transition: left var(--op-t-4) var(--op-ease), top var(--op-t-4) var(--op-ease),
-              width var(--op-t-4) var(--op-ease), height var(--op-t-4) var(--op-ease),
-              background-color var(--op-t-2) var(--op-ease-soft), box-shadow var(--op-t-2) var(--op-ease-soft),
+  /* La geometría no transiciona: el viaje lo hace mapa.js con transform (FLIP).
+     La esquina de referencia es la misma que usa el rótulo para contra-escalarse. */
+  transform-origin: 0 0;
+  transition: background-color var(--op-t-2) var(--op-ease-soft), box-shadow var(--op-t-2) var(--op-ease-soft),
               opacity var(--op-t-3) var(--op-ease), transform var(--op-t-3) var(--op-ease);
 }
 .at-celda:hover { background: var(--op-s3); }
@@ -73,11 +74,10 @@
 .at-celda__capas { position: absolute; inset: 0; }
 /* Las capas adentro: estratos. Código es lo más luminoso —lo que Fran escribió—,
    las dependencias casi nada, git se hunde. Se leen a través de la celda. */
+/* Sin transición propia: viajan escalados dentro de su celda. */
 .at-capa {
   position: absolute;
   border-radius: 3px;
-  transition: left var(--op-t-4) var(--op-ease), top var(--op-t-4) var(--op-ease),
-              width var(--op-t-4) var(--op-ease), height var(--op-t-4) var(--op-ease);
 }
 .at-capa[data-capa="codigo"] { background: rgb(255 255 255 / .10); }
 .at-capa[data-capa="build"]  { background: rgb(255 255 255 / .045); }
@@ -97,6 +97,7 @@
   pointer-events: none;
   background: linear-gradient(to bottom, rgb(0 0 0 / .22), transparent);
   border-top-left-radius: inherit;
+  transform-origin: 0 0;
 }
 .at-celda__nombre {
   font-size: var(--op-fs-12);

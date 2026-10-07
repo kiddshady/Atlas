@@ -5,7 +5,7 @@
    razonablemente cuadradas (que es todo el punto del algoritmo).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { squarify, nivelar, adentro, capasDe } from '../renderer/js/treemap.js';
+import { squarify, nivelar, adentro, capasDe, ordenEstable } from '../renderer/js/treemap.js';
 
 let pass = 0; let fail = 0;
 const ok = (n, c, x = '') => { if (c) { pass++; console.log(`  ok   ${n}`); } else { fail++; console.log(`  FALLA ${n} ${x}`); } };
@@ -67,6 +67,25 @@ ok('otra medida cambia los valores', porCodigo.discos.find((d) => d.disco === 'C
 ok('y sin capas cuando se pide', porCodigo.discos.every((d) => d.proyectos.every((p) => p.capas.length === 0)));
 const chico = nivelar(proyectos, { x: 0, y: 0, w: 60, h: 60 });
 ok('en un mapa minúsculo las capas se omiten solas', chico.discos.every((d) => d.proyectos.every((p) => p.capas.length === 0)));
+
+console.log('\n4. Orden pegajoso: los casi iguales no se reacomodan');
+// Ocho proyectos casi iguales, como los de ~430 MB en S:. Uno crece un 0,5 %.
+const casi = [435, 434, 433, 432, 430, 428, 427, 425].map((v, i) => ({ id: `p${i}`, disco: 'S', tam: tam(v, 0) }));
+const r0 = nivelar(casi, { x: 0, y: 0, w: 800, h: 500 });
+const crecido = casi.map((p) => (p.id === 'p6' ? { ...p, tam: tam(p.tam.total * 1.005, 0) } : p));
+const lugar = (n) => Object.fromEntries(n.discos[0].proyectos.map((p) => [p.id, `${p.x.toFixed(0)},${p.y.toFixed(0)}`]));
+const antes = lugar(r0);
+const movidas = (l) => Object.keys(antes).filter((id) => antes[id] !== l[id]).length;
+const sinPrevio = lugar(nivelar(crecido, { x: 0, y: 0, w: 800, h: 500 }));
+const conPrevio = lugar(nivelar(crecido, { x: 0, y: 0, w: 800, h: 500 }, { previo: r0.orden }));
+ok('sin el orden previo, un 0,5 % reacomoda celdas', movidas(sinPrevio) > 0, String(movidas(sinPrevio)));
+ok('con el orden previo, ninguna cambia de lugar', movidas(conPrevio) === 0, String(movidas(conPrevio)));
+const reordenar = (valores) => ordenEstable(valores.map((value, i) => ({ id: i, value })), new Map([[0, 0], [1, 1], [2, 2]]), (it) => it.id)
+  .map((it) => it.id).join();
+ok('el que crece de verdad (más del margen) pasa adelante', reordenar([100, 100, 150]) === '2,0,1');
+ok('el que crece poco se queda en su puesto', reordenar([100, 100, 105]) === '0,1,2');
+ok('los nuevos entran por tamaño', ordenEstable([{ id: 'a', value: 50 }, { id: 'b', value: 500 }], new Map([['a', 0]]), (it) => it.id)
+  .map((it) => it.id).join() === 'b,a');
 
 console.log(`\n═══ ${pass} ok · ${fail} fallas ═══`);
 process.exit(fail ? 1 : 0);

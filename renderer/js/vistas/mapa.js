@@ -19,6 +19,14 @@
    contra-escala en los mismos fotogramas. Los discos son dos y siguen con
    transición CSS: no cuestan, y las celdas viajan en coordenadas del disco,
    así que su movimiento se suma sin contarse dos veces.
+
+   ── Durante el escaneo: olas ───────────────────────────────────────────────
+   Los tamaños llegan cada 50-300 ms y un viaje dura 420. Redibujando con cada
+   uno, las celdas nunca llegaban: a mitad de camino salían para otro lado, y
+   el mapa temblaba entero durante todo el escaneo. Ahora lo que llega se
+   junta y el mapa se mueve de a olas, con una pausa entre una y otra en la
+   que todo queda quieto. El orden pegajoso de treemap.js hace el resto: los
+   casi iguales no se reacomodan entre ola y ola.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import Router from '../router.js';
@@ -66,9 +74,17 @@ function bezier(x1, y1, x2, y2) {
 function leerMovimiento() {
   const cs = getComputedStyle(document.documentElement);
   const dur = parseFloat(cs.getPropertyValue('--op-t-4')) || 420;
-  const m = cs.getPropertyValue('--op-ease').match(/cubic-bezier\(([^)]+)\)/);
+  const curva = cs.getPropertyValue('--op-ease').trim();
+  const m = curva.match(/cubic-bezier\(([^)]+)\)/);
   const ease = m ? bezier(...m[1].split(',').map(Number)) : (x) => 1 - 2 ** (-10 * x);
-  return { dur, ease };
+  return {
+    dur, ease,
+    // Para el salto: la salida y la entrada del relevo (motion-timing §2).
+    sale: parseFloat(cs.getPropertyValue('--op-t-2')) || 180,
+    entra: parseFloat(cs.getPropertyValue('--op-t-3')) || 280,
+    curvaSale: cs.getPropertyValue('--op-ease-both').trim() || 'ease-in-out',
+    curvaEntra: curva || 'ease-out',
+  };
 }
 
 /** Rectángulo visual de `el` (con transform), relativo al de su padre. */
@@ -78,6 +94,54 @@ function relativo(el, padre) {
 }
 
 const viajes = new WeakMap();   // celda → su animación en curso
+
+/* ── El salto ──────────────────────────────────────────────────────────────
+   Cuando el orden cambia de verdad (un proyecto que creció o se achicó mucho,
+   uno nuevo grande), hay celdas que cambian de punta del mapa. Viajando,
+   cruzaban por encima de otras diez, se encimaban (las hojas son
+   translúcidas: el cruce se veía como un manchón brillante) y el mapa entero
+   parecía sacudirse. Esas no viajan: un calco se esfuma donde estaba la
+   celda y la celda aflora en su lugar nuevo, las dos a la vez y sin
+   corrimiento. Sin espera a propósito: cuando saltan veinte juntas, la espera
+   del relevo destapaba medio disco y el mapa se apagaba un instante. La
+   entrada en expo-out llega rápido y tapa mientras el calco baja parejo. Las
+   que se corren poco siguen viajando: ahí el viaje cuenta qué pasó. */
+
+/** ¿Se va demasiado lejos para viajar? Más que su propio tamaño. */
+function salta(de, a) {
+  if (!de) return false;
+  const d = Math.hypot((de.x + de.w / 2) - (a.x + a.w / 2), (de.y + de.h / 2) - (a.y + a.h / 2));
+  return d > Math.max(64, de.w, de.h, a.w, a.h);
+}
+
+/** Deja un calco de la celda en `de` que se esfuma. Se llama ANTES de moverla. */
+function dejarCalco(c, de, { sale, curvaSale }) {
+  const calco = c.cloneNode(true);
+  calco.classList.add('at-celda--calco');
+  calco.classList.remove('is-nueva');
+  for (const a of ['data-id', 'role', 'tabindex', 'data-tip']) calco.removeAttribute(a);
+  calco.style.left = `${de.x}px`;
+  calco.style.top = `${de.y}px`;
+  calco.style.width = `${de.w}px`;
+  calco.style.height = `${de.h}px`;
+  calco.style.transform = 'none';
+  c.parentElement.appendChild(calco);
+  const an = calco.animate({ opacity: [1, 0] }, { duration: sale, easing: curvaSale, fill: 'forwards' });
+  // Plazo de red: una ventana tapada no avanza la animación (motion-timing §1).
+  const fin = () => { clearTimeout(red); calco.remove(); };
+  const red = setTimeout(fin, sale + 120);
+  an.finished.then(fin, fin);
+}
+
+/** La celda aflora en su lugar nuevo mientras el calco se esfuma. */
+function aflorar(c, { entra, curvaEntra }) {
+  viajes.get(c)?.forEach((an) => an.cancel());
+  const an = c.animate({ opacity: [0, 1] }, { duration: entra, easing: curvaEntra });
+  viajes.set(c, [an]);
+  // Una animación que no avanza (ventana tapada) dejaría la celda invisible
+  // en su primer cuadro: el plazo de red la termina.
+  setTimeout(() => { if (an.playState !== 'finished') an.finish(); }, entra + 120);
+}
 
 /** Anima la celda desde el rectángulo `de` (visual) hasta `a` (ya escrito). */
 function viajar(c, de, a, { dur, ease }) {
@@ -97,11 +161,14 @@ function viajar(c, de, a, { dur, ease }) {
      cortaría la transición de opacidad de una celda que todavía está
      aflorando y la haría aparecer de golpe. */
   viajes.get(c)?.forEach((an) => an.cancel());
-  const label = c.querySelector('.at-celda__label');
-  viajes.set(c, [
-    c.animate(celda, { duration: dur, easing: 'linear' }),
-    label.animate(rotulo, { duration: dur, easing: 'linear' }),
-  ]);
+  const anims = [c.animate(celda, { duration: dur, easing: 'linear' })];
+  /* Una celda mínima no muestra el rótulo (display: none). Animarlo igual no
+     se ve, pero Chromium no puede llevar al compositor una animación sobre
+     algo que no tiene caja: la corre en el hilo principal, cuadro a cuadro.
+     En el mapa de S: eran 48 de 74 y le sacaban un cuarto de los cuadros a
+     cada viaje. */
+  if (!c.classList.contains('is-minima')) anims.push(c.querySelector('.at-celda__label').animate(rotulo, { duration: dur, easing: 'linear' }));
+  viajes.set(c, anims);
 }
 
 export function viewMapa() {
@@ -124,22 +191,39 @@ export function viewMapa() {
   const discos = new Map();   // letra → elemento
   const celdas = new Map();   // id → elemento
   const movimiento = leerMovimiento();
+  let orden = null;   // el puesto de cada celda en el dibujo anterior (treemap.js)
 
-  /* Coalescer: los eventos del escaneo llegan de a varios por segundo y el
-     ResizeObserver dispara en cada píxel de un arrastre. Un solo dibujo por frame. */
+  /* Coalescer: el ResizeObserver dispara en cada píxel de un arrastre. Un
+     solo dibujo por frame. */
   let pedido = false;
+  let ultimo = 0;
   const pedirDibujo = () => {
     if (pedido) return;
     pedido = true;
-    requestAnimationFrame(() => { pedido = false; dibujar(); });
+    requestAnimationFrame(() => { pedido = false; ultimo = performance.now(); dibujar(); });
   };
+
+  /* Lo del escaneo va por olas: un dibujo deja viajar a las celdas (dur) y
+     descansar otro tanto antes del siguiente. Lo que llega mientras tanto
+     se junta en la ola que viene. */
+  const OLA = movimiento.dur * 2;
+  let ola = null;
+  const pedirOla = () => {
+    if (ola || pedido) return;
+    const falta = OLA - (performance.now() - ultimo);
+    if (falta <= 0) { pedirDibujo(); return; }
+    ola = setTimeout(() => { ola = null; pedirDibujo(); }, falta);
+  };
+  Router.onLeave(() => clearTimeout(ola));
 
   function dibujar() {
     if (!mapa.isConnected) return;
     const rect = { x: 0, y: 0, w: mapa.clientWidth, h: mapa.clientHeight };
     const todos = lista();
     // Midiendo solo el código, la celda ENTERA es código: los estratos sobran.
-    const { discos: layout } = nivelar(todos, rect, { valor: (p) => medidaDe(p), conCapas: S.medida === 'total' });
+    const nivel = nivelar(todos, rect, { valor: (p) => medidaDe(p), conCapas: S.medida === 'total', previo: orden });
+    const layout = nivel.discos;
+    orden = nivel.orden;
 
     /* Dónde está cada celda AHORA, en pantalla y con su viaje a medio hacer,
        relativa a su disco. Todas las lecturas van antes de la primera
@@ -204,12 +288,16 @@ export function viewMapa() {
         }
         // La celda es hija del disco: sus coordenadas van relativas a él.
         const destino = { x: p.x - d.x, y: p.y - d.y, w: p.w, h: p.h };
+        const de = nueva ? null : previos.get(p.id);
+        const salto = salta(de, destino);
+        if (salto) dejarCalco(c, de, movimiento);
         poner(c, destino);
-        if (!nueva) viajar(c, previos.get(p.id), destino, movimiento);
-        c.dataset.estado = p.estado || 'no-aplica';
-        c.classList.toggle('is-selected', S.seleccion === p.id);
         c.classList.toggle('is-chica', p.h < 38 || p.w < 70);
         c.classList.toggle('is-minima', p.h < 20 || p.w < 44);
+        if (salto) aflorar(c, movimiento);
+        else if (!nueva) viajar(c, de, destino, movimiento);
+        c.dataset.estado = p.estado || 'no-aplica';
+        c.classList.toggle('is-selected', S.seleccion === p.id);
         c.querySelector('.at-celda__nombre').textContent = p.nombre;
         c.querySelector('.at-celda__tam').textContent = fmtBytes(p.value);
         c.dataset.tip = `${p.nombre} · ${fmtBytes(p.value)}${p.estado === 'desfasada' ? ' · instalada vieja' : ''}`;
@@ -278,7 +366,7 @@ export function viewMapa() {
   Router.onLeave(suscribir((que, id) => {
     if (que === 'seleccion') { marcarSeleccion(); repintarInspector({ fundido: true }); return; }
     if (que === 'inicio' || que === 'tamano' || que === 'proyecto' || que === 'fin') {
-      pedirDibujo();
+      pedirOla();
       // El inspector muestra datos: se actualiza si cambió lo que tiene a la
       // vista (el proyecto seleccionado) o si muestra el resumen de todo.
       const afecta = !S.seleccion || id === S.seleccion || que === 'fin' || que === 'inicio';

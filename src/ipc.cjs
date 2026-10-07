@@ -16,7 +16,7 @@
    escaneo a la vez: pedir otro mientras corre cancela el anterior.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const { ipcMain, app, shell, dialog, BrowserWindow } = require('electron');
+const { ipcMain, app, shell, dialog, BrowserWindow, clipboard } = require('electron');
 const fs = require('fs');
 const actualizador = require('./actualizador.cjs');
 const path = require('path');
@@ -96,6 +96,14 @@ function register() {
     dataDir: store.ROOT,
     electron: process.versions.electron,
   }));
+  // Los archivos de datos que se apartaron por ilegibles: la app lo avisa.
+  handle('store:asides', () => store.asides().map((a) => ({ file: path.basename(a.file), dead: a.dead })));
+
+  /* El texto del portapapeles, para el "Pegar" del menú de los campos. Desde
+     la página, leerlo pide un permiso; acá no. Con tope: un portapapeles
+     gigante no tiene por qué cruzar entero. Desde Electron 44 el
+     portapapeles del proceso principal es asíncrono, como el de la web. */
+  handle('clip:read', async () => (await clipboard.readText()).slice(0, 100000));
 
   /* ── Actualizaciones: el renderer pide, el main contesta con el estado
      entero; los cambios espontáneos (progreso, error) llegan por

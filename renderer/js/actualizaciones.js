@@ -10,6 +10,7 @@
 import { Icons } from './icons.js';
 import { Toast, Modal } from './overlays.js';
 import { esc, attempt } from './ui.js';
+import { roll, swapText } from './motion.js';
 import { fmtBytes } from './format.js';
 import { S } from './estado.js';
 
@@ -54,10 +55,11 @@ function paintVersion() {
   if (!chip || !val) return;
   const v = upd?.actual || S.info?.version || '';
   const pending = upd?.fase === 'disponible' || upd?.fase === 'listo';
-  val.textContent = upd?.fase === 'listo' ? `${upd.version} lista para instalar`
+  // Cambia en su lugar con un relevo: «v0.1.3» → «0.1.4 disponible».
+  swapText(val, upd?.fase === 'listo' ? `${upd.version} lista para instalar`
     : upd?.fase === 'disponible' ? `${upd.version} disponible`
     : upd?.fase === 'descargando' ? `bajando ${upd.version}…`
-    : `v${v}`;
+    : `v${v}`);
   chip.classList.toggle('is-pending', pending);
   chip.dataset.tip = upd?.fase === 'listo' ? 'Reiniciar y actualizar'
     : upd?.fase === 'disponible' ? 'Ver la versión nueva'
@@ -71,7 +73,13 @@ function paintDownload(e) {
     : `${fmtBytes(e.progreso.transferido)}…`;
   if (!updToast) updToast = Toast.show({ title: `Descargando Atlas ${e.version}`, text: ' ', icon: 'download', duration: 0 });
   const t = updToast.el?.querySelector('.op-toast__text');
-  if (t) t.textContent = text;
+  // El porcentaje y los bytes corren desde lo que se ve, en vez de saltar
+  // con cada pedazo que llega (roll, de Opal).
+  if (t && e.progreso.total) {
+    roll(t, { pct, bytes: e.progreso.transferido }, (x) => {
+      t.textContent = `${Math.round(x.pct)} % · ${fmtBytes(x.bytes)} de ${fmtBytes(e.progreso.total)}`;
+    });
+  } else if (t) t.textContent = text;
 }
 
 function offerUpdate(e) {

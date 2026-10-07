@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    OPAL — overlays
-   Tooltip, menú, modal, toast y command palette. Todos portaleados a #op-layer,
+   Tooltip, menú, modal y toast. Todos portaleados a #op-layer,
    todos con entrada Y salida (nada se corta al cerrarse), todos propios: ni un
    title= nativo, ni un confirm() del sistema.
 
@@ -41,24 +41,22 @@
   animation: op-pop-in var(--op-t-2) var(--op-ease) both;
   will-change: transform, opacity;
 }
-.op-tooltip[data-state='closing'] { animation: op-pop-out 100ms var(--op-ease-in) both; }
-.op-tooltip__key { margin-left: var(--op-2); color: var(--op-text-4); }
+.op-tooltip[data-state='closing'] { animation: op-pop-out var(--op-t-1) var(--op-ease-in) both; }
+.op-tooltip__key { margin-left: var(--op-2); color: var(--op-text-3); }
 
 /* ── Menú contextual / dropdown ──────────────────────────────────────────── */
 /* Los overlays que scrollean también se esfuman: la regla del corte-nunca no
    se suspende porque la superficie sea chica. Cada uno lleva un fade a su
    escala, y su padding vertical lo iguala para que en reposo no coma ítems.
 
-   Pero estos tres están casi todos cerrados por una línea, y el fade solo va
+   Pero estos dos están casi todos cerrados por una línea, y el fade solo va
    donde el corte es al aire. El único lado al aire acá es el de arriba del
    modal, contra su cabecera. Cada --op-fade se queda igual aunque el lado esté
    apagado: es la escala del esfumado de esa superficie, y si mañana desaparece
    la pieza que la cierra, el fade tiene que volver con el tamaño correcto. */
 .op-menu.op-scroll,
-.op-palette__list,
 .op-modal__body.op-scroll { overflow-x: hidden; }
 .op-menu.op-scroll        { --op-fade: 10px; padding-top: 10px; padding-bottom: 10px; }
-.op-palette__list         { --op-fade: 18px; padding-top: 18px; padding-bottom: 18px; }
 .op-modal__body.op-scroll { --op-fade: 20px; padding-top: 20px; padding-bottom: 20px; }
 
 /* El menú es su propio marco: el hairline lo cierra por los cuatro lados. Acá
@@ -69,16 +67,18 @@
   --op-fade-bottom: 0px;
   mask-image: none;
 }
-/* La paleta va encajada entre dos líneas: el buscador arriba, el pie abajo. */
-.op-palette__search ~ .op-palette__list    { --op-fade-top: 0px; }
-.op-palette__list:has(~ .op-palette__foot) { --op-fade-bottom: 0px; }
 /* El modal corta al aire arriba (la cabecera no lleva línea) y contra el pie abajo. */
 .op-modal__body:has(~ .op-modal__foot)     { --op-fade-bottom: 0px; }
 
+/* El ancla de Menu.showAt: un punto invisible donde fue el click derecho. */
+.op-anchor { position: fixed; width: 1px; height: 1px; pointer-events: none; }
+
+/* El alto lo pone Menu.show: el lugar que hay desde el ancla. Esto es solo
+   el tope de la ventana entera, para medirlo. */
 .op-menu {
   position: absolute;
   min-width: 180px;
-  max-height: 60vh;
+  max-height: calc(100vh - 20px);
   padding: var(--op-1);
   border-radius: var(--op-r-lg);
   background: var(--op-s3);
@@ -88,7 +88,12 @@
   animation: op-pop-in var(--op-t-2) var(--op-ease) both;
   transform-origin: var(--origin, top left);
 }
-.op-menu[data-state='closing'] { animation: op-pop-out 110ms var(--op-ease-in) both; }
+.op-menu[data-state='closing'] { animation: op-pop-out var(--op-t-1) var(--op-ease-in) both; }
+/* Un menú que no entra entero: la barrita se ve mientras quede algo
+   escondido arriba o abajo (el fade no va acá: se come el hairline). */
+.op-menu.op-scroll:not(.is-bottom)::-webkit-scrollbar-thumb,
+.op-menu.op-scroll:not(.is-top)::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, .14); }
+.op-menu.op-scroll::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, .22); }
 .op-menuitem {
   display: flex;
   align-items: center;
@@ -105,10 +110,17 @@
   cursor: default;
   transition: var(--tr-color);
 }
-.op-menuitem .op-icon { width: 14px; height: 14px; color: var(--op-text-4); transition: color var(--op-t-1) var(--op-ease-soft); }
+.op-menuitem .op-icon { width: 14px; height: 14px; color: var(--op-text-3); transition: color var(--op-t-1) var(--op-ease-soft); }
 .op-menuitem:hover, .op-menuitem.is-active { background: var(--op-wash-2); color: var(--op-text); }
 .op-menuitem:hover .op-icon, .op-menuitem.is-active .op-icon { color: var(--op-text-2); }
 .op-menuitem.is-selected .op-icon:last-child { color: var(--op-accent); }
+/* Lo que no se puede ahora (Copiar sin nada seleccionado) se ve apagado y no
+   reacciona al pasar: las flechas del teclado ya lo saltean (overlays.js).
+   Sin esto se veía igual que los demás y se iluminaba con el mouse, pero el
+   click no hacía nada: parecía roto. */
+.op-menuitem:disabled { opacity: .38; }
+.op-menuitem:disabled:hover { background: transparent; color: var(--op-text-2); }
+.op-menuitem:disabled:hover .op-icon { color: var(--op-text-3); }
 .op-menuitem--danger { color: var(--op-danger); }
 .op-menuitem--danger .op-icon { color: var(--op-danger); }
 .op-menuitem--danger:hover { background: var(--op-danger-wash); color: var(--op-danger); }
@@ -117,7 +129,7 @@
    cuando el mouse se paraba encima. Misma especificidad, declarada después. */
 .op-menuitem--danger:hover .op-icon,
 .op-menuitem--danger.is-active .op-icon { color: var(--op-danger); }
-.op-menuitem__key { margin-left: auto; font-size: var(--op-fs-10); color: var(--op-text-4); }
+.op-menuitem__key { margin-left: auto; font-size: var(--op-fs-10); color: var(--op-text-3); }
 .op-menu__sep { height: 1px; margin: var(--op-1) var(--op-2); background: var(--op-line); }
 .op-menu__label {
   padding: var(--op-2) var(--op-2) var(--op-1);
@@ -125,7 +137,7 @@
   font-weight: var(--op-w-semi);
   letter-spacing: var(--op-track-caps);
   text-transform: uppercase;
-  color: var(--op-text-4);
+  color: var(--op-text-3);
 }
 
 /* ── Modal ───────────────────────────────────────────────────────────────── */
@@ -136,7 +148,7 @@
 .op-scrim {
   position: fixed;
   inset: 0;
-  background: rgb(3 3 4 / .48);
+  background: var(--op-scrim);
   backdrop-filter: blur(10px) saturate(120%);
   animation: op-fade-in var(--op-t-3) var(--op-ease) both;
 }
@@ -161,6 +173,10 @@
   place-items: center;
   animation: op-lift-in var(--op-t-3) var(--op-ease) both;
 }
+/* El que esperaba su turno entra sobre el mismo velo cuando el anterior ya va
+   por la mitad de su salida: relevo, no dos modales encimados. Va antes que
+   la regla de salida, que le gana con su propio delay en 0. */
+.op-modal__anim.is-after { animation-delay: 90ms; }
 /* El wrapper cubre toda la ventana, así que tiene que dejar pasar el click al
    scrim de abajo; solo el modal en sí lo intercepta. */
 #op-layer > .op-modal__anim { pointer-events: none; }
@@ -180,6 +196,13 @@
   overflow: hidden;
 }
 .op-modal__anim[data-state='closing'] { animation: op-lift-out var(--op-t-2) var(--op-ease-in) both; }
+/* Con otro esperando, la salida baja pareja: en ease-in caía de golpe al final, encima del que entra. */
+.op-modal__anim.is-relayed[data-state='closing'] { animation-timing-function: var(--op-ease-both); }
+/* Modal.show({ arm }): mientras se arma, sus botones no toman clicks (no se
+   ve nada distinto), y el foco está en el diálogo mismo, que no lleva el
+   anillo genérico: le cambiaría el radio y lo dibujaría por fuera del vidrio. */
+.op-modal__anim.is-arming .op-modal__foot .op-btn { pointer-events: none; }
+.op-modal:focus-visible { outline: none; border-radius: var(--op-r-xl); }
 .op-modal__head { padding: var(--op-5) var(--op-5) var(--op-3); display: flex; align-items: flex-start; gap: var(--op-3); }
 .op-modal__title { font-size: var(--op-fs-15); font-weight: var(--op-w-semi); letter-spacing: var(--op-track-tight); }
 .op-modal__sub { font-size: var(--op-fs-12); color: var(--op-text-3); margin-top: 4px; line-height: var(--op-lh-loose); }
@@ -191,7 +214,7 @@
   justify-content: flex-end;
   gap: var(--op-2);
   padding: var(--op-3) var(--op-5);
-  background: rgb(0 0 0 / .16);
+  background: var(--op-foot);
   box-shadow: inset 0 1px 0 var(--op-line);
 }
 
@@ -238,101 +261,3 @@
 }
 .op-toast--error .op-toast__life { background: var(--op-danger-ring); }
 @keyframes op-toast-life { from { transform: scaleX(1) } to { transform: scaleX(0) } }
-
-/* ── Command palette ─────────────────────────────────────────────────────────
-   El centro de mando de la app. Es la hoja más alta y más esmerilada del
-   sistema (s4 + blur pesado): flota sobre todo y junta toda la luz. */
-/* Mismo patrón que el modal: el wrapper posiciona y anima. Acá el bug no se
-   veía —`top:14vh` es relativo a la ventana pase lo que pase— pero la trampa
-   estaba armada igual, esperando a que alguien cambiara ese 14vh por un %. */
-.op-palette__anim {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  justify-items: center;
-  align-items: start;
-  padding-top: 14vh;
-  animation: op-lift-in var(--op-t-3) var(--op-ease) both;
-}
-#op-layer > .op-palette__anim { pointer-events: none; }
-
-.op-palette {
-  position: relative;
-  pointer-events: auto;
-  width: min(560px, calc(100vw - 96px));
-  max-height: 56vh;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--op-r-xl);
-  background: var(--op-s4);
-  backdrop-filter: var(--op-glass-heavy);
-  box-shadow: var(--op-sheet), var(--op-e4);
-  overflow: hidden;
-}
-.op-palette__anim[data-state='closing'] { animation: op-lift-out var(--op-t-2) var(--op-ease-in) both; }
-.op-palette__search {
-  display: flex;
-  align-items: center;
-  gap: var(--op-3);
-  padding: var(--op-3) var(--op-4);
-  box-shadow: inset 0 -1px 0 var(--op-line);
-  flex: 0 0 auto;
-}
-/* Lupa y texto a la escala de los ítems (15px / 13px): el buscador es una fila
-   más de la lista, no un encabezado. Con el padding de 16px la lupa cae en la
-   misma columna que los íconos de abajo. */
-.op-palette__search > .op-icon { width: 15px; height: 15px; color: var(--op-text-4); }
-.op-palette__input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--op-text);
-  font-size: var(--op-fs-13);
-  user-select: text;
-  cursor: text;
-}
-.op-palette__input::placeholder { color: var(--op-text-4); }
-.op-palette__input:focus-visible { box-shadow: none; }
-.op-palette__list { flex: 1 1 auto; min-height: 0; padding-left: var(--op-2); padding-right: var(--op-2); }
-.op-palette__group {
-  padding: var(--op-2) var(--op-2) var(--op-1);
-  font-size: var(--op-fs-10);
-  font-weight: var(--op-w-semi);
-  letter-spacing: var(--op-track-caps);
-  text-transform: uppercase;
-  color: var(--op-text-4);
-}
-.op-palette__item {
-  display: flex;
-  align-items: center;
-  gap: var(--op-3);
-  width: 100%;
-  height: 34px;
-  padding: 0 var(--op-2);
-  border: 0;
-  border-radius: var(--op-r-sm);
-  background: transparent;
-  color: var(--op-text-2);
-  font-size: var(--op-fs-13);
-  text-align: left;
-  cursor: default;
-  transition: var(--tr-color);
-}
-.op-palette__item .op-icon { width: 15px; height: 15px; color: var(--op-text-4); transition: color var(--op-t-1) var(--op-ease-soft); }
-.op-palette__item.is-active { background: var(--op-wash-2); color: var(--op-text); }
-.op-palette__item.is-active .op-icon { color: var(--op-accent); }
-.op-palette__item__hint { margin-left: auto; font-size: var(--op-fs-10); color: var(--op-text-4); }
-/* Lo que hace match con lo tipeado se ILUMINA, no se pinta de amarillo. */
-.op-palette__item mark { background: transparent; color: var(--op-accent); font-weight: var(--op-w-semi); }
-.op-palette__foot {
-  display: flex;
-  align-items: center;
-  gap: var(--op-4);
-  padding: var(--op-2) var(--op-4);
-  box-shadow: inset 0 1px 0 var(--op-line);
-  font-size: var(--op-fs-10);
-  color: var(--op-text-4);
-  flex: 0 0 auto;
-}
-.op-palette__foot .op-row { gap: var(--op-1); }

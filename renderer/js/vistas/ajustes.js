@@ -8,7 +8,7 @@ import Router from '../router.js';
 import { paint, head, esc, attempt } from '../ui.js';
 import { Icons } from '../icons.js';
 import { Toast, Modal } from '../overlays.js';
-import { exit } from '../motion.js';
+import { exit, bindToggle } from '../motion.js';
 import { S, guardarAjustes } from '../estado.js';
 import { checkUpdates } from '../actualizaciones.js';
 
@@ -116,11 +116,8 @@ export function viewAjustes() {
     exit(btn.closest('.op-listitem'));
   });
 
-  document.getElementById('set-abrir').addEventListener('click', async (e) => {
-    const on = !e.currentTarget.classList.contains('is-on');
-    e.currentTarget.classList.toggle('is-on', on);
-    await attempt(() => guardarAjustes({ escanearAlAbrir: on }));
-  });
+  // bindToggle le da role=switch y aria-checked: el lector de pantalla lo dice.
+  bindToggle(document.getElementById('set-abrir'), (on) => attempt(() => guardarAjustes({ escanearAlAbrir: on })));
 
   const excluir = document.getElementById('set-excluir');
   excluir.addEventListener('blur', async () => {

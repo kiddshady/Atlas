@@ -61,15 +61,12 @@
       <span class="op-brand__name">Atlas</span>
     </div>
 
-    <button class="op-iconbtn op-iconbtn--sm op-no-drag" id="btn-palette"
-            data-tip="Comandos" data-tip-key="Ctrl K"><i data-icon="search"></i></button>
-
     <!-- Contexto de la vista actual. Lo llena el router. -->
     <div class="op-titlebar__context" id="titlebar-context"></div>
 
     <div class="op-wincontrols">
       <button class="op-wincontrol" id="win-min"   aria-label="Minimizar"><i data-icon="winMin"></i></button>
-      <button class="op-wincontrol" id="win-max"   aria-label="Maximizar"><i data-icon="winMax"></i></button>
+      <button class="op-wincontrol op-iconswap" id="win-max" aria-label="Maximizar"><i data-icon="winMax"></i><i data-icon="winRestore"></i></button>
       <button class="op-wincontrol op-wincontrol--close" id="win-close" aria-label="Cerrar"><i data-icon="winClose"></i></button>
     </div>
   </header>

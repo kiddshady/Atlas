@@ -36,6 +36,7 @@ const path = require('path');
 const ipc = require('./src/ipc.cjs');
 const store = require('./src/store.cjs');
 const actualizador = require('./src/actualizador.cjs');
+const { keepAlive } = require('./src/recover.cjs');
 
 /* Color base de arranque. Tiene que coincidir con --op-bg de tokens.css.
    Como --op-bg es oklch y Electron solo entiende hex, el renderer se lo vuelve
@@ -80,20 +81,37 @@ async function loadWindowState() {
   return { width: w, height: h, maximized: !!s?.maximized, ...(hasPos ? { x: s.x, y: s.y } : centered(w, h)) };
 }
 
+function windowState() {
+  if (!win || win.isDestroyed()) return null;
+  // Guardar el bounds NORMAL: si guardás el maximizado, al desmaximizar la
+  // próxima vez la ventana queda del tamaño de la pantalla y sin poder volver.
+  const b = win.getNormalBounds();
+  return { x: b.x, y: b.y, width: b.width, height: b.height, maximized: win.isMaximized() };
+}
+
 let saveTimer = null;
 function saveWindowState() {
   if (!win || win.isDestroyed()) return;
   clearTimeout(saveTimer);
   // Debounce: arrastrar una ventana emite decenas de eventos por segundo.
   saveTimer = setTimeout(() => {
-    if (!win || win.isDestroyed()) return;
-    const maximized = win.isMaximized();
-    // Guardar el bounds NORMAL: si guardás el maximizado, al desmaximizar la
-    // próxima vez la ventana queda del tamaño de la pantalla y sin poder volver.
-    const b = win.getNormalBounds();
-    winState.write({ x: b.x, y: b.y, width: b.width, height: b.height, maximized })
-      .catch((err) => console.error('[window] no se pudo guardar el estado:', err.message));
+    saveTimer = null;
+    const s = windowState();
+    if (s) winState.write(s).catch((err) => console.error('[window] no se pudo guardar el estado:', err.message));
   }, 400);
+}
+
+/* Lo que el debounce tenía pendiente, al disco YA y sin soltar el hilo. Al
+   cerrar, la app se va antes de que llegue una escritura asíncrona; al
+   apagar Windows, el sistema puede matar el proceso en cualquier momento
+   después de avisar (store.cjs, trampa 4). Movida y cerrada enseguida, la
+   ventana volvía a abrir donde estaba antes. */
+function flushWindowState() {
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  const s = windowState();
+  try { if (s) winState.writeSync(s); } catch (err) { console.error('[window] no se pudo guardar el estado:', err.message); }
 }
 
 function createWindow(state) {
@@ -121,6 +139,8 @@ function createWindow(state) {
   });
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  // Si se cae el proceso de la interfaz, la ventana se recarga sola (recover.cjs).
+  keepAlive(win);
 
   win.once('ready-to-show', () => {
     win.show();
@@ -150,6 +170,12 @@ function createWindow(state) {
   win.on('unmaximize', () => { pushMaximized(); saveWindowState(); });
   win.on('resize', saveWindowState);
   win.on('move', saveWindowState);
+  /* Apagar, reiniciar o cerrar la sesión de Windows no pasa por la cruz:
+     Windows avisa y después puede cortar. Lo tuyo que quede pendiente (un
+     borrador con debounce) va acá también, con writeSync. */
+  win.on('close', flushWindowState);
+  win.on('query-session-end', flushWindowState);
+  win.on('session-end', flushWindowState);
 
   // Nada de navegación fuera de la app; los links externos van al navegador.
   win.webContents.setWindowOpenHandler(({ url }) => {

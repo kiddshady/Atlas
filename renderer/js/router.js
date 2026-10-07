@@ -10,6 +10,8 @@
    la app se degrada sola después de un rato de uso.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { calcar, recienCalcado } from './motion.js';
+
 const routes = new Map();
 const listeners = new Set();
 
@@ -72,12 +74,34 @@ export function go(name, param = null) {
   document.querySelectorAll('.op-navitem').forEach((b) =>
     b.classList.toggle('is-active', b.dataset.view === navKey));
 
+  /* La vista que se va pasa a un calco que se esfuma encima (calcar, en
+     motion.js): sin esto se iba de un cuadro al otro y la nueva arrancaba
+     desde transparente, un cuadro vacío en cada navegación.
+
+     Salvo que el host se haya calcado hace un instante (un refresh() y un
+     go() en la misma tarea): lo que hay es un estado intermedio que el calco,
+     todavía casi opaco, no dejó ver. Calcarlo otra vez dejaba DOS calcos
+     fundiéndose y el intermedio asomaba a mitad de camino (lo midió Onyx en
+     Quire). Se descarta, y lo nuevo va directo debajo del calco que ya está.
+
+     `__pinta` avisa que en el host vive otra vista: lo que el repintado de
+     recién dejó pendiente (devolver el scroll y el foco) ya no es para ella. */
+  if (host) host.__pinta = (host.__pinta ?? 0) + 1;
+  const intermedio = !!host && recienCalcado(host);
+  if (intermedio) host.replaceChildren();
+  const saliente = intermedio || calcar(host);
+
   route.view(param);
 
-  // La transición de vista se reinicia a mano: sin el reflow intermedio el
-  // navegador no vuelve a disparar la animación al re-agregar la clase.
-  if (host) {
-    host.classList.remove('op-view');
+  /* Si hay una vista yéndose, la nueva no anima nada: ya está entera y
+     quieta debajo del calco, que es opaco, y el relevo lo hace el calco al
+     esfumarse. Si entrara aflorando (subiendo desde transparente), la
+     pantalla se destaparía hasta la mitad y volvería, y lo que las dos vistas
+     tienen en el mismo lugar (el encabezado, las barras) temblaría. Aflora
+     sola, sin nada que se vaya: al arrancar. La transición se reinicia a
+     mano: sin el reflow intermedio el navegador no vuelve a dispararla. */
+  if (host) host.classList.remove('op-view');
+  if (host && !saliente) {
     void host.offsetWidth;
     host.classList.add('op-view');
     /* Y la clase se VA cuando la animación termina — no es prolijidad. Una
@@ -96,7 +120,9 @@ export function go(name, param = null) {
   return true;
 }
 
-/** Vuelve a montar la vista actual (después de un cambio de datos de fondo). */
+/** Vuelve a montar la vista actual (después de un cambio de datos de fondo).
+ *  Es un fundido que no pierde el lugar (scroll, foco, revelados, cápsulas)
+ *  y no vuelve a hacer entrar nada: lo hace paint() (repintar, en motion.js). */
 export function refresh() {
   const route = routes.get(current.name);
   if (!route) return;

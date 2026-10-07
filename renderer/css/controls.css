@@ -83,7 +83,7 @@
   color: #fff;
   box-shadow: var(--op-e1);
 }
-.op-btn--danger-solid:hover { background: #a04a50; }
+.op-btn--danger-solid:hover { background: var(--op-danger-hover); }
 
 /* Tamaños */
 .op-btn--sm { height: 24px; padding: 0 var(--op-2); font-size: var(--op-fs-11); }
@@ -104,11 +104,30 @@
   cursor: default;
   overflow: hidden;
   position: relative;
-  transition: var(--tr-color), transform var(--op-t-1) var(--op-ease-soft);
+  /* La opacidad también: un botón que se apaga (atrás, adelante) no salta. */
+  transition: var(--tr-color), transform var(--op-t-1) var(--op-ease-soft), opacity var(--op-t-1) var(--op-ease-soft);
 }
 .op-iconbtn:hover { background: var(--op-wash-1); color: var(--op-text); }
 .op-iconbtn:active { transform: scale(.92); background: var(--op-wash-2); }
 .op-iconbtn.is-active { background: var(--op-wash-2); color: var(--op-text); }
+/* Apagado se ve apagado: antes era igual a uno que anda, y el click no hacía nada. */
+.op-iconbtn:disabled { color: var(--op-text-4); opacity: .55; pointer-events: none; }
+
+/* Dos estados de un mismo botón con dos íconos (copiar → copiado, recargar →
+   detener, maximizar → restaurar): los dos viven en la misma celda y se
+   cruzan; .is-b muestra el segundo. Cambiar el SVG por innerHTML lo hacía
+   saltar de un cuadro al otro. Son los dos SVG del botón: lo que no es un
+   SVG (el contador del escudo de Prism) no entra en el cruce. Cómo se va el
+   primero y de dónde llega el segundo se cambia con --swap-out y --swap-in
+   (recargar gira, la estrella late). Prism tenía esta misma regla copiada
+   seis veces, una por botón. */
+.op-iconswap > .op-icon {
+  grid-area: 1 / 1;
+  transition: opacity var(--op-t-2) var(--op-ease-soft), transform var(--op-t-3) var(--op-ease);
+}
+.op-iconswap > .op-icon:last-of-type { opacity: 0; transform: var(--swap-in, scale(.75)); }
+.op-iconswap.is-b > .op-icon:first-of-type { opacity: 0; transform: var(--swap-out, scale(.75)); }
+.op-iconswap.is-b > .op-icon:last-of-type { opacity: 1; transform: none; }
 .op-iconbtn--sm { width: 22px; height: 22px; }
 .op-iconbtn--sm .op-icon { width: 13px; height: 13px; }
 
@@ -120,7 +139,7 @@
   color: var(--op-text-3);
   letter-spacing: .01em;
 }
-.op-field__hint { font-size: var(--op-fs-11); color: var(--op-text-4); }
+.op-field__hint { font-size: var(--op-fs-11); color: var(--op-text-3); }
 .op-field__hint--error { color: var(--op-danger); }
 
 .op-input,
@@ -139,6 +158,11 @@
   transition: box-shadow var(--op-t-2) var(--op-ease-soft),
               background-color var(--op-t-2) var(--op-ease-soft);
 }
+/* El campo mide lo mismo que un select y un botón: 30 px justos. Con
+   min-height y el renglón heredado (19,5 px) terminaba en 31,5: en una misma
+   fila convivían dos alturas, y el medio píxel dejaba borroso el canto de
+   abajo. Un input centra solo su renglón; el textarea conserva su padding. */
+.op-input { height: 30px; padding-block: 0; }
 .op-input::placeholder,
 .op-textarea::placeholder { color: var(--op-text-4); }
 .op-input:hover,
@@ -149,6 +173,9 @@
   background: var(--op-sunken-2);
   box-shadow: inset 0 0 0 1px var(--op-line-3), 0 0 0 3px var(--op-wash-1);
 }
+/* Ese pozo ya es su marca de foco: el anillo genérico encima sería un doble borde. */
+.op-input:focus-visible,
+.op-textarea:focus-visible { outline: none; }
 .op-input.is-invalid,
 .op-textarea.is-invalid { box-shadow: inset 0 0 0 1px var(--op-danger-ring); }
 .op-textarea { min-height: 88px; resize: vertical; line-height: var(--op-lh); }
@@ -201,15 +228,19 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--op-text-4);
+  /* text-3 y no text-4: una flecha que anda se tiene que ver (con text-4
+     medía 1,7:1 contra el campo, y un control pide 3:1). */
+  color: var(--op-text-3);
   cursor: pointer;
-  transition: var(--tr-color);
+  transition: var(--tr-color), opacity var(--op-t-1) var(--op-ease-soft);
 }
 
 .op-stepper__btn:hover:not(:disabled) { color: var(--op-text); background: var(--op-s3); }
 .op-stepper__btn:active:not(:disabled) { color: var(--op-accent); }
-/* Apagado en el tope: el botón sigue ahí para que el campo no cambie de forma. */
-.op-stepper__btn:disabled { opacity: .25; cursor: default; }
+/* Apagado en el tope: el botón sigue ahí para que el campo no cambie de forma,
+   en el gris de lo deshabilitado (con opacity .25 encima, la activa y la
+   apagada casi no se distinguían). */
+.op-stepper__btn:disabled { color: var(--op-text-4); cursor: default; }
 .op-stepper__btn .op-icon { width: 10px; height: 10px; }
 
 /* ── Select propio ────────────────────────────────────────────────────────────
@@ -236,6 +267,9 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
 .op-select.is-open { background: var(--op-sunken-2); box-shadow: inset 0 0 0 1px var(--op-line-3); }
 .op-select__value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .op-select__value:empty::before { content: attr(data-placeholder); color: var(--op-text-4); }
+/* Un placeholder que es texto de verdad: así el valor que llega se cruza con él (swap). */
+.op-select__placeholder { color: var(--op-text-4); }
+.op-select__value > .op-swap__item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .op-select .op-icon { color: var(--op-text-4); transition: transform var(--op-t-2) var(--op-ease), color var(--op-t-1) var(--op-ease-soft); }
 .op-select:hover .op-icon { color: var(--op-text-2); }
 .op-select.is-open .op-icon { transform: rotate(180deg); color: var(--op-text-2); }
@@ -334,6 +368,8 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
   transform: translateX(calc(var(--seg, 0) * var(--seg-w, 0px)));
   transition: transform var(--op-t-3) var(--op-ease), width var(--op-t-3) var(--op-ease);
 }
+/* Mientras bindSwitcher lo ubica al nacer: aparece en su lugar, no viaja. */
+.op-segmented[data-placing]::before { transition: none; }
 .op-segmented__opt {
   position: relative;
   z-index: 1;
@@ -352,6 +388,10 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
   cursor: default;
   transition: color var(--op-t-2) var(--op-ease-soft);
 }
+/* El anillo va hacia adentro, con las esquinas de la cápsula: el de base.css
+   sale 3.5px por fuera y acá hay 2px de carril, así que se pisaba con el
+   canto del control y con las opciones vecinas. */
+.op-segmented__opt:focus-visible { outline-offset: -1.5px; border-radius: var(--op-r-xs); }
 .op-segmented__opt:hover { color: var(--op-text-2); }
 .op-segmented__opt.is-active { color: var(--op-text); }
 .op-segmented__opt .op-icon { width: 12px; height: 12px; }

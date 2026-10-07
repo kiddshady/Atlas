@@ -224,6 +224,9 @@
   transition: opacity var(--op-t-3) var(--op-ease);
 }
 .at-progreso[data-state="running"] { opacity: 1; }
+/* Escanear ↔ Cancelar se relevan en su lugar (swap): la celda es una grilla,
+   y el rótulo va centrado como en cualquier botón. */
+#btn-scan.op-swap { justify-items: center; }
 .at-progreso__meter { width: 90px; }
 
 /* ── Lista ─────────────────────────────────────────────────────────────────── */
@@ -310,4 +313,7 @@
 /* ── Versión en la statusbar: es el botón del actualizador ─────────────────── */
 .at-version { cursor: pointer; transition: color var(--op-t-2) var(--op-ease); }
 .at-version:hover { color: var(--op-text); }
+/* Ocupa todo el alto de la statusbar, que toca el borde de la ventana: el
+   anillo de base.css (2 px por fuera) quedaba cortado abajo. Va hacia adentro. */
+.at-version:focus-visible { outline-offset: -1.5px; border-radius: var(--op-r-xs); }
 .at-version.is-pending .op-statusbar__value { color: var(--op-accent); }

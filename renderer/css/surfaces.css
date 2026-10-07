@@ -197,7 +197,7 @@
   font-weight: var(--op-w-semi);
   letter-spacing: var(--op-track-caps);
   text-transform: uppercase;
-  color: var(--op-text-4);
+  color: var(--op-text-3);
 }
 
 /* Par clave/valor */
@@ -208,7 +208,7 @@
   align-items: baseline;
   font-size: var(--op-fs-12);
 }
-.op-kv__k { color: var(--op-text-4); }
+.op-kv__k { color: var(--op-text-3); }
 .op-kv__v { color: var(--op-text-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; user-select: text; }
 
 /* ── Lista ────────────────────────────────────────────────────────────────── */
@@ -281,7 +281,7 @@
   font-weight: var(--op-w-semi);
   letter-spacing: var(--op-track-caps);
   text-transform: uppercase;
-  color: var(--op-text-4);
+  color: var(--op-text-3);
   /* Casi opaco y derivado del fondo: el header pegajoso tiene que TAPAR las
      filas que pasan por debajo, y color-mix lo mantiene atado a las perillas. */
   background: color-mix(in srgb, var(--op-bg) 97%, transparent);
@@ -297,7 +297,17 @@
   box-shadow: inset 0 -1px 0 var(--op-line);
   user-select: text;
 }
-.op-tr { transition: background-color var(--op-t-1) var(--op-ease-soft); }
+/* Una fila con tabindex (se abre con Enter) lleva el anillo hacia adentro: la
+   fila va de borde a borde de su tabla, y la tabla muchas veces de borde a
+   borde de su card, así que el de base.css se pisaba con el canto de la card.
+   Es un outline y no una sombra: el outline se pinta encima de las celdas, y
+   una sombra de la fila quedaba debajo de su fondo. */
+.op-tr {
+  outline: 1.5px solid transparent;
+  outline-offset: -1.5px;
+  transition: background-color var(--op-t-1) var(--op-ease-soft), outline-color var(--op-t-1) var(--op-ease-soft);
+}
+.op-tr:focus-visible { outline-color: var(--op-ring); }
 .op-tr:hover td { background: var(--op-wash-1); }
 .op-tr.is-selected td { background: var(--op-wash-2); }
 .op-tr.is-failed td:first-child { box-shadow: inset 2px 0 0 var(--op-danger), inset 0 -1px 0 var(--op-line); }
@@ -336,6 +346,8 @@
   transform: translateX(var(--tab-x, 0px));
   transition: transform var(--op-t-3) var(--op-ease), width var(--op-t-3) var(--op-ease);
 }
+/* Mientras bindSwitcher lo ubica al nacer: aparece en su lugar, no viaja. */
+.op-tabs[data-placing]::after { transition: none; }
 .op-tab {
   display: flex;
   align-items: center;
@@ -355,7 +367,7 @@
 .op-tab__count {
   font-size: var(--op-fs-10);
   font-variant-numeric: tabular-nums;
-  color: var(--op-text-4);
+  color: var(--op-text-3);
   padding: 0 4px;
   border-radius: var(--op-r-xs);
   background: var(--op-wash-1);
@@ -410,7 +422,7 @@
   font-weight: var(--op-w-medium);
   letter-spacing: var(--op-track-caps);
   text-transform: uppercase;
-  color: var(--op-text-4);
+  color: var(--op-text-3);
 }
 .op-stat__unit { font-size: var(--op-fs-12); font-weight: var(--op-w-regular); color: var(--op-text-3); }
 
@@ -449,7 +461,7 @@
 }
 .op-empty .op-icon { width: 34px; height: 34px; color: var(--op-text-4); stroke-width: 1; }
 .op-empty__title { font-size: var(--op-fs-15); font-weight: var(--op-w-medium); color: var(--op-text-2); }
-.op-empty__text { font-size: var(--op-fs-12); color: var(--op-text-4); max-width: 320px; line-height: var(--op-lh-loose); }
+.op-empty__text { font-size: var(--op-fs-12); color: var(--op-text-3); max-width: 320px; line-height: var(--op-lh-loose); }
 
 /* ── Consola de log ───────────────────────────────────────────────────────── */
 .op-log {
@@ -460,11 +472,11 @@
   user-select: text;
 }
 .op-log__line { display: flex; gap: var(--op-3); padding: 1px 0; animation: op-fade-in var(--op-t-2) var(--op-ease) both; }
-.op-log__time { color: var(--op-text-4); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.op-log__time { color: var(--op-text-3); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .op-log__src  { color: var(--op-text-3); flex: 0 0 auto; min-width: 74px; }
 .op-log__msg  { min-width: 0; word-break: break-word; }
 .op-log__line--error .op-log__msg { color: var(--op-danger); }
-.op-log__line--muted .op-log__msg { color: var(--op-text-4); }
+.op-log__line--muted .op-log__msg { color: var(--op-text-3); }
 
 /* ── Celda de ícono ───────────────────────────────────────────────────────────
    Para vitrinas y selectores de íconos. El ícono manda y la etiqueta es un

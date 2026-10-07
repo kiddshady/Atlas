@@ -7,21 +7,20 @@
 
 import { Icons } from './icons.js';
 import './iconos-atlas.js';
-import { Tooltip, Toast } from './overlays.js';
-import Palette from './palette.js';
+import { Tooltip, Toast, FieldMenu } from './overlays.js';
 import Router from './router.js';
-import { initClickFlash, initScrollFades, raf2, tick } from './motion.js';
+import { initClickFlash, initScrollFades, raf2, tick, roll, swap, swapText } from './motion.js';
 import { paint, head, empty, esc, attempt, copy, colorToken, viewEl } from './ui.js';
 import { fmtBytes, relTime, plural } from './format.js';
 import { designHTML, wireDesign } from './design-view.js';
 import {
-  S, cargar, suscribir, lista, proyecto, seleccionar, escanear, cancelarEscaneo,
+  S, cargar, suscribir, proyecto, seleccionar, escanear, cancelarEscaneo,
   escucharEscaneo, totalBytes, desfasadas,
 } from './estado.js';
 import { viewMapa } from './vistas/mapa.js';
 import { viewLista } from './vistas/lista.js';
 import { viewAjustes } from './vistas/ajustes.js';
-import { wireUpdates, checkUpdates } from './actualizaciones.js';
+import { wireUpdates } from './actualizaciones.js';
 
 const api = window.opal;
 
@@ -76,14 +75,12 @@ function wireShell() {
   const maxBtn = document.getElementById('win-max');
   maxBtn?.addEventListener('click', () => w?.toggleMaximize());
   w?.onMaximized((isMax) => {
-    maxBtn.innerHTML = Icons.svg(isMax ? 'winRestore' : 'winMax');
+    maxBtn.classList.toggle('is-b', isMax);   // los dos íconos se cruzan (.op-iconswap)
     maxBtn.setAttribute('aria-label', isMax ? 'Restaurar' : 'Maximizar');
   });
 
   document.querySelectorAll('.op-navitem').forEach((b) =>
     b.addEventListener('click', () => Router.go(b.dataset.view)));
-
-  document.getElementById('btn-palette')?.addEventListener('click', () => Palette.toggle());
 
   const btnScan = document.getElementById('btn-scan');
   btnScan?.addEventListener('click', () => (S.escaneando ? cancelarEscaneo() : pedirEscaneo()));
@@ -124,52 +121,60 @@ function wireShell() {
   });
 }
 
-/** Todo lo que vive fuera de la vista: statusbar, contadores del rail, botón de escaneo. */
+/* Un contador que corre desde lo que muestra ahora (roll, de Opal). La
+   primera vez escribe sin correr: el primer llenado no es un cambio. */
+function contar(id, valor, formato = (v) => String(Math.round(v))) {
+  const el = document.getElementById(id);
+  if (el) roll(el, valor, (v) => { el.textContent = formato(v); });
+}
+
+/** Todo lo que vive fuera de la vista: statusbar, contadores del rail, botón de escaneo.
+    Se llama con cada evento del escaneo: lo que ya se ve se pone al día (corre o
+    se releva), no se reescribe de golpe. */
 function updateChrome() {
   const n = S.proyectos.size;
-  document.getElementById('nav-count').textContent = n;
-  document.getElementById('nav-stale').textContent = desfasadas().length;
-  document.getElementById('stat-proyectos').textContent = n;
-  document.getElementById('stat-total').textContent = n ? fmtBytes(totalBytes()) : '—';
+  contar('nav-count', n);
+  contar('nav-stale', desfasadas().length);
+  contar('stat-proyectos', n);
+  const total = document.getElementById('stat-total');
+  if (n) contar('stat-total', totalBytes(), fmtBytes);
+  else { delete total.__roll; total.textContent = '—'; }
 
   const ultimo = document.querySelector('#stat-escaneo .op-statusbar__value');
-  if (ultimo) ultimo.textContent = S.escaneando ? 'escaneando' : (S.escaneadoEn ? relTime(S.escaneadoEn) : 'sin escanear');
+  if (ultimo) swapText(ultimo, S.escaneando ? 'escaneando' : (S.escaneadoEn ? relTime(S.escaneadoEn) : 'sin escanear'));
 
   const prog = document.getElementById('stat-progreso');
   prog.dataset.state = S.escaneando ? 'running' : 'idle';
-  const { hechos, total } = S.progreso;
-  document.getElementById('stat-progreso-texto').textContent = S.escaneando ? `${hechos}/${total}` : '';
-  document.getElementById('stat-progreso-fill').style.setProperty('--op-pct', `${total ? (hechos / total) * 100 : 0}%`);
+  const { hechos, total: de } = S.progreso;
+  const texto = document.getElementById('stat-progreso-texto');
+  // Un escaneo nuevo arranca de 0/N sin correr hacia atrás desde el anterior.
+  // Al terminar, el texto se queda: el medidor se apaga con él adentro.
+  if (S.escaneando && hechos === 0) delete texto.__roll;
+  if (S.escaneando) roll(texto, { h: hechos, t: de }, (v) => { texto.textContent = `${Math.round(v.h)}/${Math.round(v.t)}`; });
+  const fill = document.getElementById('stat-progreso-fill');
+  // El que arranca de nuevo toma su 0 sin transición: si no, la barra llena
+  // del escaneo anterior se desenrollaba hacia atrás mientras aparecía.
+  if (S.escaneando && hechos === 0) fill.style.transition = 'none';
+  fill.style.setProperty('--op-pct', `${de ? (hechos / de) * 100 : 0}%`);
+  if (fill.style.transition) { void fill.offsetWidth; fill.style.transition = ''; }
 
   const btn = document.getElementById('btn-scan');
-  if (btn) btn.innerHTML = S.escaneando
-    ? `${Icons.svg('scan', 'op-spinning')} Cancelar`
-    : `${Icons.svg('scan')} Escanear`;
+  if (btn) {
+    btn.classList.add('op-swap--row');
+    swap(btn, S.escaneando ? `${Icons.svg('scan', 'op-spinning')} Cancelar` : `${Icons.svg('scan')} Escanear`);
+  }
 
-  document.getElementById('rail-foot').innerHTML = `<div class="op-col" style="gap:2px;min-width:0">${(S.settings.raices || [])
+  // Las raíces solo cambian desde Ajustes: reescribirlas en cada evento del
+  // escaneo soltaba el tooltip de la que tenía el mouse encima.
+  const foot = document.getElementById('rail-foot');
+  const raices = `<div class="op-col" style="gap:2px;min-width:0">${(S.settings.raices || [])
     .map((r) => `<span class="op-meta op-truncate op-mono" data-tip="${esc(r)}">${esc(r)}</span>`).join('')}</div>`;
+  if (foot.__html !== raices) { foot.innerHTML = raices; foot.__html = raices; }
 
   const ctx = document.getElementById('titlebar-context');
   const p = S.seleccion ? proyecto(S.seleccion) : null;
-  ctx.innerHTML = p ? `${Icons.svg('folder', 'op-icon--sm')}<span>${esc(p.nombre)}</span>` : '';
-}
-
-function registerCommands() {
-  Palette.clear();
-  Palette.register([
-    { id: 'scan', group: 'Escaneo', icon: 'scan', label: 'Escanear las raíces', run: pedirEscaneo },
-    { id: 'nav-mapa', group: 'Ir a', icon: 'map', label: 'Mapa', run: () => Router.go('mapa') },
-    { id: 'nav-lista', group: 'Ir a', icon: 'list', label: 'Lista', run: () => Router.go('lista') },
-    { id: 'nav-desfasadas', group: 'Ir a', icon: 'stale', label: 'Desfasadas', run: () => Router.go('desfasadas') },
-    { id: 'nav-piezas', group: 'Ir a', icon: 'layers', label: 'Piezas', run: () => Router.go('piezas') },
-    { id: 'nav-ajustes', group: 'Ir a', icon: 'settings', label: 'Ajustes', run: () => Router.go('ajustes') },
-    { id: 'update', group: 'Sistema', icon: 'retry', label: 'Buscar actualizaciones', run: checkUpdates },
-    ...lista().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({
-      id: `p-${p.id}`, group: 'Proyecto', icon: p.tipo === 'electron' ? 'box' : 'folder', label: p.nombre,
-      hint: p.tam ? fmtBytes(p.tam.total) : p.disco,
-      run: () => { if (Router.name !== 'mapa' && Router.name !== 'lista' && Router.name !== 'desfasadas') Router.go('mapa'); seleccionar(p.id); },
-    })),
-  ]);
+  ctx.classList.add('op-swap--row');
+  swap(ctx, p ? `${Icons.svg('folder', 'op-icon--sm')}<span>${esc(p.nombre)}</span>` : '');
 }
 
 /* ══ Color de la ventana ═════════════════════════════════════════════════════
@@ -180,12 +185,26 @@ function syncWindowColor() {
   if (hex) api?.win?.setBackground(hex);
 }
 
+/* Un archivo de datos ilegible se aparta (store.cjs) y la app arranca sin él.
+   Sin este aviso, para la persona sus datos simplemente desaparecieron. */
+async function tellAsides() {
+  const list = await api.asides().catch(() => []);
+  if (!list.length) return;
+  const files = [...new Set(list.map((a) => a.file))];
+  Toast.show({
+    tone: 'error',
+    duration: 0,
+    title: files.length === 1 ? `${files[0]} estaba dañado` : `${files.join(', ')} estaban dañados`,
+    text: `${files.length === 1 ? 'Quedó' : 'Quedaron'} aparte en la carpeta de datos, con «.corrupto-» en el nombre, y la app arrancó sin ${files.length === 1 ? 'él' : 'ellos'}.`,
+  });
+}
+
 /* ══ Arranque ════════════════════════════════════════════════════════════════ */
 
 async function boot() {
   Icons.mount(document);
   Tooltip.init();
-  Palette.init({ placeholder: 'Proyecto, vista o acción' });
+  FieldMenu.init();           // el click derecho en un campo: cortar, copiar, pegar
   initClickFlash();
   initScrollFades();
   wireShell();
@@ -204,7 +223,6 @@ async function boot() {
   suscribir((que, extra) => {
     updateChrome();
     if (que === 'fin') {
-      registerCommands();
       if (!extra?.cancelado) {
         const viejas = desfasadas().length;
         Toast.show({
@@ -218,10 +236,10 @@ async function boot() {
     if (que === 'error') Toast.error('El escaneo falló', String(extra || ''));
   });
 
-  registerCommands();
   updateChrome();
   Router.onChange(updateChrome);
   Router.go('mapa');
+  tellAsides();
 
   raf2(() => {
     const splash = document.getElementById('boot-splash');

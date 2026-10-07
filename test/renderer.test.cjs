@@ -186,22 +186,13 @@ app.whenReady().then(async () => {
   ok('Desfasadas lista solo las viejas', (await js(`[...document.querySelectorAll('#filas tr[data-select]')].map((t) => t.dataset.select).join()`)) === 'c-alfa');
 
   console.log('\n5. Overlays: dónde caen, no solo si existen');
-  await click('#btn-palette');
-  await sleep(500);
-  const pal = await js(`(() => { const p=document.querySelector('.op-palette'); if(!p) return null;
-    const r=p.getBoundingClientRect(); return {t:Math.round(r.top),cx:Math.round(r.left+r.width/2)}; })()`);
-  ok('la paleta abre centrada y visible', pal && pal.t > 0 && Math.abs(pal.cx - W / 2) < 4, JSON.stringify(pal));
-
-  /* Y el campo vacío no promete cosas de otra app. Estuvo diciendo «Buscar
-     comandos, pipelines, agentes…» —vocabulario de aquella para la que se
-     escribió esta paleta— y viajó con la plantilla hasta un editor de química,
-     donde ofrecía dos features que no existen. Un texto que solo se lee con el
-     campo en blanco es de los que nadie vuelve a mirar: que lo mire esto. */
-  const ph = await js(`document.querySelector('.op-palette__input')?.placeholder || ''`);
-  ok('con una pista en el campo vacío', ph.length > 3, ph);
-  ok('y sin vocabulario prestado de otra app', !/pipeline|agente/i.test(ph), ph);
-
-  await click('.op-scrim'); await sleep(400);
+  /* La paleta de comandos salió (como en Opal): todo lo que hacía tiene su
+     lugar a la vista. Que no vuelva por la titlebar ni por el atajo. */
+  ok('no hay botón de paleta en la titlebar', !(await js(`!!document.getElementById('btn-palette')`)));
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'K', modifiers: ['control'] });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'K', modifiers: ['control'] });
+  await sleep(400);
+  ok('Ctrl+K no abre nada', !(await js(`!!document.querySelector('.op-palette, #op-layer .op-scrim')`)));
 
   await click('[data-view="piezas"]');
   await sleep(900);
@@ -623,6 +614,150 @@ app.whenReady().then(async () => {
   ok('scrollbar propia', reglas.scrollbar);
   ok('::selection propia', reglas.seleccion);
   ok('focus ring propio (:focus-visible)', reglas.focus);
+  /* Sin esto, lo que Chromium dibuja por su cuenta (el calendario de un campo
+     de fecha, el selector de color) sale con su blanco de fábrica. */
+  ok('la interfaz se declara oscura (color-scheme)', (await js(`getComputedStyle(document.documentElement).colorScheme`)) === 'dark');
+
+  /* ── 9-bis. Ningún anillo de foco se corta (de Opal) ───────────────────────
+     Cada control se enfoca como con teclado y se mide su anillo real: que se
+     note, y que no lo recorte un scroller, la ventana ni el canto de una
+     superficie. Las filas de la lista se prueban con tabindex, como las usa
+     Atlas. */
+  console.log('\n9-bis. Ningún anillo de foco se corta');
+  const AUDITAR_ANILLOS = `((scope) => {
+  if (!document.getElementById('aud-notr')) document.head.insertAdjacentHTML('beforeend', '<style id="aud-notr">*,*::before{transition:none!important}</style>');
+  // Lo que se ve de un elemento y puede marcar el foco (el de las ventanas va en su ::before).
+  const look = (el) => {
+    const s = getComputedStyle(el);
+    const ring = s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0 && !/rgba\\(0, 0, 0, 0\\)/.test(s.outlineColor);
+    return [ring, s.boxShadow, s.backgroundColor, s.borderColor, getComputedStyle(el, '::before').boxShadow].join('|');
+  };
+  // Cuánto sale el anillo REAL por fuera del elemento: se lo enfoca como con
+  // teclado y se leen sus sombras de afuera y su outline. Y si el foco se
+  // nota en algo: un anillo que mide cero puede ser uno hacia adentro (el
+  // segmentado) o uno que no está (el primario, cuando su sombra le ganaba).
+  let marked = true;
+  const extent = (el) => {
+    const before = look(el);
+    el.focus({ focusVisible: true, preventScroll: true });
+    marked = !el.matches(':focus') || look(el) !== before;
+    const s = getComputedStyle(el);
+    let m = 0;
+    for (const part of s.boxShadow.split(/,(?![^(]*\\))/)) {
+      if (part.includes('inset') || part.trim() === 'none') continue;
+      const nums = part.replace(/rgba?\\([^)]*\\)|oklch\\([^)]*\\)/g, '').match(/-?[\\d.]+px/g) || [];
+      const [x = 0, y = 0, blur = 0, spread = 0] = nums.map(parseFloat);
+      if (blur > 0) continue;   // una sombra difusa (elevación, brillo) no es el anillo
+      m = Math.max(m, spread + Math.max(Math.abs(x), Math.abs(y)));
+    }
+    if (s.outlineStyle !== 'none' && !/rgba\\(0, 0, 0, 0\\)/.test(s.outlineColor)) m = Math.max(m, parseFloat(s.outlineWidth) + parseFloat(s.outlineOffset));
+    el.blur();
+    return m;
+  };
+  const SEL = 'a[href],button:not([disabled]):not([tabindex="-1"]),input:not([disabled]):not([type=hidden]),select,textarea,[tabindex]:not([tabindex="-1"]),[contenteditable="true"]';
+  const name = (el) => {
+    const id = el.id ? '#' + el.id : '';
+    const cls = [...el.classList].slice(0, 2).map((c) => '.' + c).join('');
+    const txt = (el.getAttribute('aria-label') || el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 24);
+    return el.tagName.toLowerCase() + id + cls + (txt ? ' «' + txt + '»' : '');
+  };
+  const out = [];
+  for (const el of scope.querySelectorAll(SEL)) {
+    if (el.closest('[inert],[hidden],[aria-hidden="true"]')) continue;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+    el.scrollIntoView({ block: 'center', inline: 'center' });
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) continue;
+    const R = extent(el);
+    if (!marked) { out.push(name(el) + '  no marca el foco'); continue; }
+    if (R <= 0.5) continue;
+    const boxes = [{ who: 'ventana', l: 0, t: 0, r: innerWidth, b: innerHeight }];
+    for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+      const s = getComputedStyle(a);
+      if (s.overflowX !== 'visible' || s.overflowY !== 'visible' || s.clipPath !== 'none' || /paint|strict|content/.test(s.contain)) {
+        const ar = a.getBoundingClientRect();
+        const l = ar.left + a.clientLeft; const t = ar.top + a.clientTop;
+        boxes.push({ who: name(a), l, t, r: l + a.clientWidth, b: t + a.clientHeight });
+      }
+    }
+    const e = 0.5;
+    // ¿Roza el canto de una superficie (card, panel, modal)? Un fondo o una
+    // sombra con radio: el anillo se pisa con su borde aunque nada lo recorte.
+    for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+      const s = getComputedStyle(a);
+      const surf = (s.backgroundColor !== 'rgba(0, 0, 0, 0)' || s.boxShadow !== 'none') && parseFloat(s.borderTopLeftRadius) > 0;
+      if (!surf) continue;
+      const ar = a.getBoundingClientRect();
+      const g = [r.left - ar.left, r.top - ar.top, ar.right - r.right, ar.bottom - r.bottom];
+      if (g.some((x) => x < -e)) continue;
+      const lados = ['izq', 'arriba', 'der', 'abajo'].filter((_, i) => g[i] < R - e).map((n, i) => n);
+      const det = g.map((x, i) => ['izq', 'arriba', 'der', 'abajo'][i] + ' ' + x.toFixed(1)).filter((_, i) => g[i] < R - e);
+      if (det.length) { out.push(name(el) + '  roza ' + name(a) + '  [' + det.join(', ') + ']'); break; }
+    }
+    for (const bx of boxes) {
+      const inside = r.left >= bx.l - e && r.top >= bx.t - e && r.right <= bx.r + e && r.bottom <= bx.b + e;
+      if (!inside) break;   // el elemento mismo ya está recortado: no es culpa del anillo
+      const lados = [];
+      if (r.left - R < bx.l - e) lados.push('izq ' + (r.left - bx.l).toFixed(1));
+      if (r.top - R < bx.t - e) lados.push('arriba ' + (r.top - bx.t).toFixed(1));
+      if (r.right + R > bx.r + e) lados.push('der ' + (bx.r - r.right).toFixed(1));
+      if (r.bottom + R > bx.b + e) lados.push('abajo ' + (bx.b - r.bottom).toFixed(1));
+      if (lados.length) { out.push(name(el) + '  ← ' + bx.who + '  [' + lados.join(', ') + ']'); break; }
+    }
+  }
+  document.querySelectorAll('.op-scroll, .op-main, [class*="scroll"]').forEach((s) => { s.scrollTop = 0; s.scrollLeft = 0; });
+  return out;
+})(document)`;
+  win.focus();
+  win.webContents.focus();
+  await sleep(150);
+  ok('la ventana tiene el foco (si no, no hay anillos que medir)', await js('document.hasFocus()'));
+  for (const v of ['mapa', 'lista', 'desfasadas', 'piezas', 'ajustes']) {
+    await click(`[data-view="${v}"]`);
+    await sleep(900);
+    const cortes = await js(AUDITAR_ANILLOS);
+    ok(`${v}: todo control marca el foco, y ningún anillo se corta ni roza un canto`, cortes.length === 0, '\n      ' + cortes.join('\n      '));
+  }
+  await js(`document.getElementById('aud-notr')?.remove()`);
+
+  /* ── 16. Cambiar de vista es un fundido (de Opal) ──────────────────────────
+     La vieja pasa a un calco opaco encima y la nueva ya está pintada debajo,
+     quieta; el calco se esfuma parejo y se va. */
+  console.log('\n16. Cambiar de vista es un fundido');
+  await click('[data-view="lista"]');
+  await sleep(900);
+  const navegar = await js(`(async () => {
+    const { default: Router } = await import('./js/router.js');
+    Router.go('ajustes');
+    const calco = document.querySelector('.op-main--saliente');
+    const host = document.getElementById('view');
+    const r = { calco: !!calco, opaco: !!calco && getComputedStyle(calco).opacity === '1', nuevaPintada: host.children.length > 0 };
+    const ops = [];
+    const t0 = performance.now();
+    while (calco?.isConnected && performance.now() - t0 < 800) { ops.push(Number(getComputedStyle(calco).opacity)); await new Promise((res) => requestAnimationFrame(res)); }
+    return { ...r, seFue: !calco?.isConnected, parejo: ops.every((v, i) => !i || v <= ops[i - 1] + 0.001) };
+  })()`);
+  ok('al navegar, la vieja pasa a un calco opaco encima y la nueva ya está debajo',
+    navegar.calco && navegar.opaco && navegar.nuevaPintada, JSON.stringify(navegar));
+  ok('y el calco se esfuma parejo hasta irse', navegar.seFue && navegar.parejo, JSON.stringify(navegar));
+
+  /* ── 20. Si se cae la interfaz, vuelve sola (de Opal) ──────────────────────
+     Va al final: recarga la ventana. */
+  console.log('\n20. Si se cae el proceso de la interfaz, la ventana vuelve sola');
+  const { keepAlive } = require(path.join(ROOT, 'src', 'recover.cjs'));
+  const caidas = [];
+  keepAlive(win, { onGone: (d) => caidas.push(d.reason) });
+  win.webContents.forcefullyCrashRenderer();
+  let volvio = false;
+  for (const t0 = Date.now(); Date.now() - t0 < 15000 && !volvio; await sleep(250)) {
+    // Con tope por intento: con el renderer caído, executeJavaScript no vuelve nunca.
+    volvio = await Promise.race([
+      js(`!document.getElementById('boot-splash') && document.getElementById('view').children.length > 0`),
+      sleep(1500).then(() => false),
+    ]).catch(() => false);
+  }
+  ok('se recarga y la app arranca de nuevo', !!volvio && caidas.length === 1, JSON.stringify({ volvio, caidas }));
 
   // Los datos eran de mentira y temporales: se van con el test.
   fs.rmSync(DATA, { recursive: true, force: true });

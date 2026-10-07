@@ -32,7 +32,7 @@
 import Router from '../router.js';
 import { paint, head, esc, empty } from '../ui.js';
 import { Icons } from '../icons.js';
-import { exit, raf2, bindSwitcher } from '../motion.js';
+import { exit, raf2, bindSwitcher, roll } from '../motion.js';
 import { fmtBytes, plural } from '../format.js';
 import { S, lista, suscribir, seleccionar, medidaDe, guardarAjustes, totalBytes } from '../estado.js';
 import { nivelar } from '../treemap.js';
@@ -268,7 +268,8 @@ export function viewMapa() {
         discos.set(d.disco, el);
       }
       poner(el, d);
-      el.querySelector('.at-disco__label .op-num').textContent = fmtBytes(d.value);
+      const bytes = el.querySelector('.at-disco__label .op-num');
+      roll(bytes, d.value, (v) => { bytes.textContent = fmtBytes(v); });
 
       for (const p of d.proyectos) {
         vivosCelda.add(p.id);
@@ -372,7 +373,12 @@ export function viewMapa() {
       const afecta = !S.seleccion || id === S.seleccion || que === 'fin' || que === 'inicio';
       if (afecta) (que === 'fin' ? repintarInspector() : repintarInspectorSuave());
       const sub = document.querySelector('.op-viewhead__sub');
-      if (sub && S.proyectos.size) sub.textContent = `${plural(S.proyectos.size, 'proyecto', 'proyectos')} · ${fmtBytes(totalBytes())} en disco`;
+      // Los números corren con el escaneo; la frase no se rehace.
+      if (sub && S.proyectos.size) {
+        roll(sub, { n: S.proyectos.size, b: totalBytes() }, (v) => {
+          sub.textContent = `${plural(Math.round(v.n), 'proyecto', 'proyectos')} · ${fmtBytes(v.b)} en disco`;
+        });
+      }
     }
   }));
 

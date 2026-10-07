@@ -9,6 +9,7 @@ import Router from '../router.js';
 import { paint, head, esc, empty } from '../ui.js';
 import { Icons } from '../icons.js';
 import { fmtBytes, relTime, plural } from '../format.js';
+import { reconcile, swapText } from '../motion.js';
 import { S, lista, suscribir, seleccionar, desfasadas } from '../estado.js';
 import { chipEstado, estratos, tipoLabel, motivoDe } from './comunes.js';
 import { inspectorHTML, repintarInspector, repintarInspectorSuave } from './inspector.js';
@@ -79,20 +80,30 @@ export function viewLista({ soloViejas = false } = {}) {
     return out;
   }
 
+  /* La tabla se pone al día fila por fila (reconcile, de Opal): al filtrar,
+     ordenar o recibir un tamaño del escaneo, las que siguen viajan a su lugar,
+     las que se van se esfuman y las nuevas entran. Antes se rehacía entera
+     con innerHTML en cada letra del filtro. */
+  let primera = true;
   function pintarFilas() {
     const vis = visibles();
-    conteo.textContent = vis.length === S.proyectos.size ? plural(vis.length, 'proyecto', 'proyectos') : `${vis.length} de ${S.proyectos.size}`;
-    if (!vis.length) {
-      filas.innerHTML = `<tr><td colspan="${COLUMNAS.length}" style="padding:40px 0;box-shadow:none">${empty({
-        icon: soloViejas ? 'check' : 'inbox',
-        title: soloViejas ? 'Todo lo instalado está al día' : 'Nada que mostrar',
-        text: soloViejas ? 'Ninguna app instalada tiene un repo más nuevo que ella.' : (S.proyectos.size ? 'Ningún proyecto coincide con el filtro.' : 'Escaneá las raíces primero.'),
-      })}</td></tr>`;
-      Icons.mount(filas);
-      return;
-    }
-    filas.innerHTML = vis.map((p) => `
-      <tr class="op-tr${S.seleccion === p.id ? ' is-selected' : ''}" data-select="${esc(p.id)}" tabindex="0">
+    const texto = vis.length === S.proyectos.size ? plural(vis.length, 'proyecto', 'proyectos') : `${vis.length} de ${S.proyectos.size}`;
+    if (primera) conteo.textContent = texto; else swapText(conteo, texto);
+    const filasVis = vis.length ? vis.map((p) => ({ key: p.id, html: filaHTML(p) })) : [{ key: '__vacio', html: vacioHTML() }];
+    reconcile(filas, filasVis, { created: (el) => Icons.mount(el), enter: !primera });
+    primera = false;
+  }
+
+  function vacioHTML() {
+    return `<tr><td colspan="${COLUMNAS.length}" style="padding:40px 0;box-shadow:none">${empty({
+      icon: soloViejas ? 'check' : 'inbox',
+      title: soloViejas ? 'Todo lo instalado está al día' : 'Nada que mostrar',
+      text: soloViejas ? 'Ninguna app instalada tiene un repo más nuevo que ella.' : (S.proyectos.size ? 'Ningún proyecto coincide con el filtro.' : 'Escaneá las raíces primero.'),
+    })}</td></tr>`;
+  }
+
+  function filaHTML(p) {
+    return `<tr class="op-tr${S.seleccion === p.id ? ' is-selected' : ''}" data-select="${esc(p.id)}" tabindex="0">
         <td>${esc(p.nombre)}</td>
         <td class="op-td--tight op-mono">${esc(p.disco)}</td>
         <td class="op-td--num op-td--tight"><span class="op-row" style="justify-content:flex-end;gap:8px">${estratos(p.tam, { mini: true })}<span class="op-num">${p.tam ? esc(fmtBytes(p.tam.total)) : '<span class="op-dim">midiendo</span>'}</span></span></td>
@@ -100,8 +111,7 @@ export function viewLista({ soloViejas = false } = {}) {
         <td class="at-td-commit" data-tip="${esc(p.git?.ultimo?.msg || '')}"><span class="op-truncate">${esc(p.git ? (p.git.ultimo ? `${relTime(p.git.ultimo.ts)} · ${p.git.ultimo.msg}` : 'sin commits') : '')}</span>${p.git?.sucios ? `<span class="op-chip op-chip--outline" data-tip="${p.git.sucios} sin commitear" style="margin-left:6px">${p.git.sucios}</span>` : ''}</td>
         <td class="op-td--tight at-ver">${versionHTML(p)}</td>
         <td class="op-td--tight">${soloViejas ? `<span class="op-dim">${esc(motivoDe(p))}</span>` : (p.tipo === 'electron' ? chipEstado(p, { detalle: false }) : '')}</td>
-      </tr>`).join('');
-    Icons.mount(filas);
+      </tr>`;
   }
 
   /* Coalescer para el escaneo, igual que el mapa: una tabla no se repinta
@@ -130,8 +140,10 @@ export function viewLista({ soloViejas = false } = {}) {
   });
 
   filas.addEventListener('keydown', (e) => {
+    // Sobre la fila misma, no sobre algo enfocable de adentro (Opal: Enter en
+    // un botón de la fila lo apretaba Y seleccionaba la fila).
     const tr = e.target.closest?.('tr[data-select]');
-    if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); seleccionar(tr.dataset.select); }
+    if (tr && e.target === tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); seleccionar(tr.dataset.select); }
   });
 
   Router.onLeave(suscribir((que, id) => {

@@ -34,13 +34,15 @@
    caiga donde caiga una mancha: el contraste no puede depender de la niebla.
 
    Es absolute, no participa del grid, y es UNA capa estática: animarla
-   obligaría a recomponer cada hoja de vidrio en cada frame. */
-.op-fog {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
+   obligaría a recomponer cada hoja de vidrio en cada frame.
+
+   Las capas viven en --op-sustrato porque hay otra cosa que las necesita:
+   el calco de la vista que se va (.op-main--saliente, motion.css) es opaco,
+   y lo opaco de una vista transparente es la niebla que tiene detrás. Con
+   background-attachment: fixed, las mismas capas caen exactamente donde caen
+   las de .op-fog, que también ocupa la ventana entera. */
+.op-app {
+  --op-sustrato:
     /* El grano, arriba de todo el sustrato. */
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.038'/%3E%3C/svg%3E"),
     /* El velo. Parejo a propósito: con un degradé vertical, sobre un fondo
@@ -51,6 +53,13 @@
     radial-gradient(46vw 46vw at 10% 0%, rgb(255 255 255 / calc(.062 * var(--op-fog))), transparent 70%),
     radial-gradient(42vw 42vw at 94% 16%, rgb(255 255 255 / calc(.05 * var(--op-fog))), transparent 70%),
     radial-gradient(40vw 40vw at 42% 110%, rgb(255 255 255 / calc(.042 * var(--op-fog))), transparent 70%);
+}
+.op-fog {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--op-sustrato);
 }
 
 /* ── Titlebar ──────────────────────────────────────────────────────────────── */
@@ -102,9 +111,17 @@
   pointer-events: none;
 }
 
-/* Controles de ventana: propios, no los de Windows. */
+/* Controles de ventana: propios, no los de Windows. El botón ocupa todo el
+   alto (maximizada, tirar el mouse a la esquina tiene que acertar la cruz),
+   pero lo que se ve — hover, press y anillo de foco — es una pastilla
+   adentro, a la escala de un .op-iconbtn. Pintado sobre el botón, el anillo
+   del teclado se cortaba contra el canto de la ventana, y el rojo de cerrar
+   llegaba hasta el borde. `--op-wincontrol-nudge` la corre en vertical, para
+   alinearla con lo que tenga al lado la titlebar de cada app. */
 .op-wincontrols { display: flex; margin-left: auto; height: 100%; }
 .op-wincontrol {
+  position: relative;
+  z-index: 0;
   width: 46px;
   height: 100%;
   display: grid;
@@ -115,9 +132,24 @@
   cursor: default;
   transition: var(--tr-color);
 }
-.op-wincontrol:hover { background: var(--op-wash-1); color: var(--op-text); }
-.op-wincontrol:active { background: var(--op-wash-2); }
-.op-wincontrol--close:hover { background: var(--op-danger-dim); color: #fff; }
+.op-wincontrol::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 5px;
+  right: 5px;
+  top: calc((100% - 28px) / 2 + var(--op-wincontrol-nudge, 0px));
+  height: 28px;
+  border-radius: var(--op-r-sm);
+  transition: background var(--op-t-2) var(--op-ease-soft), box-shadow var(--op-t-1) var(--op-ease-soft);
+}
+.op-wincontrol:hover { color: var(--op-text); }
+.op-wincontrol:hover::before { background: var(--op-wash-1); }
+.op-wincontrol:active::before { background: var(--op-wash-2); }
+.op-wincontrol--close:hover { color: #fff; }
+.op-wincontrol--close:hover::before { background: var(--op-danger-dim); }
+.op-wincontrol:focus-visible { outline: none; }
+.op-wincontrol:focus-visible::before { box-shadow: 0 0 0 2px var(--op-bg), 0 0 0 3.5px var(--op-ring); }
 .op-wincontrol .op-icon { width: 11px; height: 11px; stroke-width: 1.2; }
 
 /* ── Cuerpo ───────────────────────────────────────────────────────────────── */
@@ -137,7 +169,11 @@
   min-height: 0;
 }
 .op-rail__top { padding: var(--op-3) var(--op-3) var(--op-2); }
-.op-rail__nav { flex: 1 1 auto; min-height: 0; padding: 0 var(--op-3); }
+/* El nav es un .op-scroll, que recorta: sin padding arriba y abajo, el anillo
+   de foco del primer y del último ítem se cortaba contra ese borde. Arriba es
+   además el respiro entre el botón principal y la navegación, que iban
+   pegados. (El esfumado no molesta: en reposo, .is-top lo apaga.) */
+.op-rail__nav { flex: 1 1 auto; min-height: 0; padding: var(--op-2) var(--op-3) var(--op-1); }
 /* Abajo el nav muere contra la línea del pie, no al aire: ahí no va esfumado.
    Con :has(), si una app se queda sin pie el fade vuelve solo. */
 .op-rail__nav:has(~ .op-rail__foot) { --op-fade-bottom: 0px; }
@@ -148,7 +184,7 @@
   font-weight: var(--op-w-semi);
   letter-spacing: var(--op-track-caps);
   text-transform: uppercase;
-  color: var(--op-text-4);
+  color: var(--op-text-3);
 }
 
 .op-navitem {
@@ -200,7 +236,7 @@
   margin-left: auto;
   font-size: var(--op-fs-11);
   font-variant-numeric: tabular-nums;
-  color: var(--op-text-4);
+  color: var(--op-text-3);
   transition: color var(--op-t-1) var(--op-ease-soft);
 }
 .op-navitem:hover .op-navitem__count,

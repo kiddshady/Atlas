@@ -148,7 +148,77 @@
   animation: op-shimmer 1.7s var(--op-ease-both) infinite;
 }
 
+/* ── Relevo de contenido (swap() en motion.js) ───────────────────────────────
+   El valor viejo y el nuevo en la misma celda: no hay "al lado" ni salto al
+   terminar. El nuevo espera a que el viejo casi no se vea, y la salida va en
+   in-out para no caer de golpe con alguien esperando detrás. */
+/* Doble clase: le gana al display propio del elemento (una fila de flex). */
+.op-swap.op-swap { display: grid; }
+/* Uno que vivía en línea (un número en medio de una oración) sigue en línea:
+   como grid de bloque, partía el párrafo en tres renglones. */
+.op-swap.op-swap--inline { display: inline-grid; }
+.op-swap > .op-swap__item {
+  grid-area: 1 / 1;
+  min-width: 0;
+  animation: op-fade-in var(--op-t-2) var(--op-ease-soft) both;
+  /* Siempre en su capa. Mientras se anima, Chromium la dibuja aparte; al
+     asentarse volvía a la página, que redondea distinto una posición con
+     decimales (y = 54,75): el valor saltaba un píxel justo al terminar. Con
+     la capa fija se dibuja igual antes y después. */
+  will-change: opacity;
+}
+/* Un texto que se corta con puntos suspensivos se sigue cortando adentro. */
+.op-truncate.op-swap > .op-swap__item,
+.op-swap--truncate > .op-swap__item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Un rótulo con ícono (un botón) sigue siendo una fila adentro de su celda. */
+.op-swap--row > .op-swap__item { display: inline-flex; align-items: center; gap: inherit; }
+.op-swap > .op-swap__item[data-dir='up']   { animation-name: op-swap-up-in; }
+.op-swap > .op-swap__item[data-dir='down'] { animation-name: op-swap-down-in; }
+.op-swap > .op-swap__item.is-after { animation-delay: 60ms; }
+.op-swap > .op-swap__item.is-settled { animation: none; }
+/* Después de is-settled, con la misma especificidad: salir siempre gana. */
+.op-swap > .op-swap__item[data-state='closing'] { animation: op-swap-out var(--op-t-out) var(--op-ease-both) both; }
+.op-swap > .op-swap__item[data-dir='up'][data-state='closing']   { animation-name: op-swap-up-out; }
+.op-swap > .op-swap__item[data-dir='down'][data-state='closing'] { animation-name: op-swap-down-out; }
+
+/* Las salidas sin `from`: parten de donde estén, aunque las agarre entrando. */
+@keyframes op-swap-out      { to { opacity: 0 } }
+@keyframes op-swap-up-in    { from { opacity: 0; transform: translateY(5px) } to { opacity: 1; transform: none } }
+@keyframes op-swap-up-out   { to { opacity: 0; transform: translateY(-5px) } }
+@keyframes op-swap-down-in  { from { opacity: 0; transform: translateY(-5px) } to { opacity: 1; transform: none } }
+@keyframes op-swap-down-out { to { opacity: 0; transform: translateY(5px) } }
+
+/* ── Fundido (dissolve() en motion.js) ───────────────────────────────────────
+   El calco de lo que se va, encima de lo nuevo. Cada superficie le pone su
+   fondo opaco: si se viera a través, durante el fundido estarían las dos. */
+.op-dissolving { position: relative; z-index: 1; pointer-events: none; }
+.op-dissolving[data-state='closing'] { animation: op-dissolve var(--op-t-2) var(--op-ease-both) both; }
+@keyframes op-dissolve { to { opacity: 0 } }
+
 /* ── Transición de vista ─────────────────────────────────────────────────────
-   Al cambiar de sección la vista AFLORA: sube apenas y se materializa. Es la
-   firma de Opal — lo nuevo emerge hacia la superficie del vidrio. */
+   Al arrancar, la vista AFLORA: sube apenas y se materializa. Es la firma de
+   Opal: lo nuevo emerge hacia la superficie del vidrio. */
 .op-view { animation: op-rise-in var(--op-t-4) var(--op-ease) both; }
+
+/* Al cambiar de sección (y al repintar la misma), un fundido: la vieja pasa a
+   un calco (.op-main--saliente, lo arma calcar() en motion.js) en la misma
+   celda que la nueva, encima, y se esfuma. La nueva ya está entera y quieta
+   debajo, y el calco es opaco (la niebla de atrás, alineada con la de la
+   ventana), así que la pantalla está tapada en todo momento y lo único que
+   cambia es cuánto se ve de cada una. Si la nueva aflorara al mismo tiempo,
+   la pantalla se destaparía hasta la mitad y lo que las dos tienen en el
+   mismo lugar (el encabezado) temblaría. */
+.op-body > .op-main { grid-column: 2; grid-row: 1; }
+/* Cada vista es su propio contexto de apilamiento: un hijo de la vista nueva
+   con z-index alto (un th sticky, un panel absoluto) le ganaba al calco y se
+   veía entero desde el primer cuadro. No es bloque contenedor ni frontera de
+   backdrop: un vidrio de la vista sigue esmerilando. */
+.op-body > .op-main { isolation: isolate; }
+/* Doble clase: shell.css, que carga después, deja .op-main transparente. */
+.op-main.op-main--saliente {
+  pointer-events: none;
+  z-index: 1;
+  background: var(--op-sustrato), var(--op-bg);
+  background-attachment: fixed;
+}
+.op-main--saliente[data-state='closing'] { animation: op-dissolve var(--op-t-2) var(--op-ease-both) both; }

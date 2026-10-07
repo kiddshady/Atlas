@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('opal', {
   },
 
   info: () => call('app:info'),
+  /** Los archivos de datos ilegibles que se apartaron en esta corrida. */
+  asides: () => call('store:asides'),
 
   win: {
     minimize: () => ipcRenderer.send('win:minimize'),
@@ -65,6 +67,12 @@ contextBridge.exposeInMainWorld('opal', {
       ipcRenderer.on('update:cambio', handler);
       return () => ipcRenderer.off('update:cambio', handler);
     },
+  },
+
+  /** Leer el portapapeles (el "Pegar" del menú de los campos). Escribir no
+      pasa por acá: navigator.clipboard.writeText no pide permiso. */
+  clip: {
+    read: () => call('clip:read'),
   },
 
   settings: {

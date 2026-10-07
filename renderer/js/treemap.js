@@ -173,7 +173,7 @@ export function nivelar(proyectos, rect, {
 
 /** Las capas de un tamaño como ítems con valor, en el orden de la leyenda. */
 export function capasDe(tam) {
-  return ['codigo', 'deps', 'build', 'git']
+  return ['codigo', 'local', 'deps', 'build', 'git']
     .map((capa) => ({ capa, value: tam?.[capa] || 0 }))
     .filter((c) => c.value > 0);
 }

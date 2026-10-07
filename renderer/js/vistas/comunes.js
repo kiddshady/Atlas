@@ -10,6 +10,7 @@ import { fmtBytes, relTime } from '../format.js';
 
 export const CAPAS = [
   { id: 'codigo', label: 'Código', hint: 'Lo que está escrito a mano, más assets' },
+  { id: 'local', label: 'Local', hint: 'Lo que el .gitignore deja fuera del repo: datos, modelos, capturas, logs' },
   { id: 'deps', label: 'Dependencias', hint: 'node_modules, venvs, target' },
   { id: 'build', label: 'Build', hint: 'dist, out, release' },
   { id: 'git', label: 'Git', hint: 'El historial en .git' },

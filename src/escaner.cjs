@@ -34,12 +34,19 @@ function fsReal() {
 const fs = fsReal();
 const fsp = fs.promises;
 const path = require('path');
-const { execFile } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
 
 /* ── Capas del tamaño ─────────────────────────────────────────────────────────
    Un directorio con uno de estos nombres, esté donde esté en el árbol, cuenta
    entero para su capa y no se baja más a clasificar. Lo que no cae en ninguna
-   es "código": lo que Fran escribió, más assets. */
+   es "código": lo que Fran escribió, más assets.
+
+   Salvo lo que el repo deja afuera: lo que el .gitignore ignora y no es
+   dependencia, build ni git es "local" —los datos de la app en desarrollo,
+   modelos descargados, capturas de verificación, logs—. Sin esto, NeonCode
+   marcaba 2,6 GB de "código" que eran su carpeta data/ con un modelo de
+   embeddings adentro. Se decide con git y no por nombre porque un data/ es
+   datos del usuario en las apps de Fran y código de verdad en otros repos. */
 const CAPAS = {
   deps: new Set(['node_modules', 'site-packages', '.venv', 'venv', 'target', '.cargo', '__pycache__', '.cache', '.next', '.gradle']),
   git: new Set(['.git']),
@@ -52,28 +59,55 @@ function capaDe(nombre) {
 }
 
 /**
+ * Las rutas absolutas que el repo de `dir` ignora, de la salida de
+ * `git status --porcelain=v1 --ignored -z`. Git agrupa una carpeta ignorada
+ * entera en una sola entrada ("data/") sin recorrerla.
+ */
+function leerIgnorados(salida, dir) {
+  const out = new Set();
+  for (const ent of String(salida).split('\0')) {
+    if (!ent.startsWith('!! ')) continue;
+    out.add(path.join(dir, ent.slice(3).replace(/\/$/, '')));
+  }
+  return out;
+}
+
+/** Lo que ignora el repo de `dir`. Vacío si `dir` no es la raíz de un repo. */
+function ignoradosDe(dir) {
+  if (!fs.existsSync(path.join(dir, '.git'))) return new Set();
+  try {
+    const salida = execFileSync('git', ['-C', dir, 'status', '--porcelain=v1', '--ignored', '-z'],
+      { timeout: 20000, windowsHide: true, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return leerIgnorados(salida, dir);
+  } catch { return new Set(); }   // sin git instalado o repo roto: todo sigue como código
+}
+
+/**
  * Recorre un árbol sumando bytes por capa. Síncrono a propósito: en Windows
  * el stat asíncrono pasa por el threadpool y termina siendo más lento que
  * el bloqueante; quien lo llame desde Electron lo mete en un worker.
+ * `ignorados` (rutas absolutas) manda a "local" lo que sería código.
  */
-function medir(dir, capa = 'codigo', acc = { codigo: 0, deps: 0, git: 0, build: 0, archivos: 0 }) {
+function medir(dir, capa = 'codigo', acc = { codigo: 0, deps: 0, git: 0, build: 0, local: 0, archivos: 0 }, ignorados = null) {
   let ents;
   try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
   for (const e of ents) {
     if (e.isSymbolicLink()) continue;            // un enlace se cuenta donde vive el destino
     const p = path.join(dir, e.name);
+    const local = capa === 'codigo' && !!ignorados?.has(p);
     if (e.isDirectory()) {
-      medir(p, capa === 'codigo' ? (capaDe(e.name) || 'codigo') : capa, acc);
+      // El nombre manda: un node_modules ignorado sigue siendo dependencia.
+      medir(p, capa === 'codigo' ? (capaDe(e.name) || (local ? 'local' : 'codigo')) : capa, acc, ignorados);
     } else if (e.isFile()) {
-      try { acc[capa] += fs.statSync(p).size; acc.archivos++; } catch { /* borrado a mitad de camino */ }
+      try { acc[local ? 'local' : capa] += fs.statSync(p).size; acc.archivos++; } catch { /* borrado a mitad de camino */ }
     }
   }
   return acc;
 }
 
-function medirProyecto(dir) {
-  const t = medir(dir);
-  return { ...t, total: t.codigo + t.deps + t.git + t.build };
+function medirProyecto(dir, { ignorados = ignoradosDe(dir) } = {}) {
+  const t = medir(dir, 'codigo', undefined, ignorados);
+  return { ...t, total: t.codigo + t.deps + t.git + t.build + t.local };
 }
 
 /* ── Proyectos ───────────────────────────────────────────────────────────── */
@@ -333,7 +367,7 @@ async function enLotes(items, n, fn) {
 }
 
 module.exports = {
-  CAPAS, medir, medirProyecto, idDe, listarProyectos, leerPackage, tipoDe,
+  CAPAS, medir, medirProyecto, leerIgnorados, ignoradosDe, idDe, listarProyectos, leerPackage, tipoDe,
   leerGit, commitsDesde, remotoCorto, leerInstaladas, parsearReg, emparejarInstalada,
   compararVersion, leerInstalada, veredicto, describir, enLotes,
 };

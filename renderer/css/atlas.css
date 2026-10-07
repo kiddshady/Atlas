@@ -86,6 +86,9 @@
 .at-capa[data-capa="build"]  { background: rgb(255 255 255 / .045); }
 .at-capa[data-capa="deps"]   { background: rgb(255 255 255 / .018); }
 .at-capa[data-capa="git"]    { background: rgb(0 0 0 / .18); }
+/* Local va rayada: el mapa es acromático y los cuatro tonos ya están
+   tomados. La raya dice "esto está acá pero no es del repo". */
+.at-capa[data-capa="local"]  { background: repeating-linear-gradient(135deg, rgb(255 255 255 / .075) 0 3px, transparent 3px 7px); }
 
 /* El rótulo flota sobre los estratos, con un velo hundido para que se lea
    caiga donde caiga. */
@@ -165,6 +168,7 @@
 .at-leyenda__sw[data-capa="build"]  { background: rgb(255 255 255 / .11); }
 .at-leyenda__sw[data-capa="deps"]   { background: rgb(255 255 255 / .05); }
 .at-leyenda__sw[data-capa="git"]    { background: rgb(0 0 0 / .32); }
+.at-leyenda__sw[data-capa="local"]  { background: repeating-linear-gradient(135deg, rgb(255 255 255 / .26) 0 2px, transparent 2px 4px); }
 
 /* ── Estratos: la barra apilada del tamaño ───────────────────────────────────
    Una sola barra con un segmento por capa; el ancho es la proporción. En el
@@ -187,6 +191,7 @@
 .at-estratos__seg[data-capa="build"]  { background: rgb(255 255 255 / .28); }
 .at-estratos__seg[data-capa="deps"]   { background: rgb(255 255 255 / .12); }
 .at-estratos__seg[data-capa="git"]    { background: rgb(255 255 255 / .05); }
+.at-estratos__seg[data-capa="local"]  { background: repeating-linear-gradient(135deg, rgb(255 255 255 / .42) 0 2px, rgb(255 255 255 / .10) 2px 4px); }
 
 /* Filas capa → bytes, debajo de la barra. */
 .at-capas {

@@ -10,6 +10,7 @@ import { createRequire } from 'module';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 
 const require = createRequire(import.meta.url);
 const E = require('../src/escaner.cjs');
@@ -65,11 +66,41 @@ ok('código = lo que no cae en ninguna capa', t.codigo === 1000 + 2000 + alfaByt
 ok('deps = node_modules entero, aunque tenga un dist adentro', t.deps === 5700, String(t.deps));
 ok('build = dist', t.build === 4000);
 ok('git = .git', t.git === 300);
-ok('total = la suma', t.total === t.codigo + t.deps + t.build + t.git);
+ok('total = la suma', t.total === t.codigo + t.deps + t.build + t.git + t.local);
 ok('cuenta archivos', t.archivos === 7, String(t.archivos));
 const v = E.medirProyecto(path.join(RAIZ, 'envx'));
 ok('site-packages es dependencia', v.deps === 8000 && v.codigo === 10);
 ok('una carpeta inexistente mide cero sin explotar', E.medirProyecto(path.join(RAIZ, 'no-existe')).total === 0);
+
+console.log('\n2b. Local: lo que el repo ignora');
+const salida = ['!! data/', '?? nuevo.js', '!! node_modules/', '!! notas.md', ' M main.cjs', ''].join('\0');
+const ign = E.leerIgnorados(salida, path.join(RAIZ, 'Beta'));
+ok('lee solo las entradas ignoradas, sin la barra final', [...ign].map((p) => path.relative(path.join(RAIZ, 'Beta'), p)).sort().join() === 'data,node_modules,notas.md');
+escribir('Beta/main.cjs', 100);
+escribir('Beta/data/models/modelo.onnx', 9000);
+escribir('Beta/notas.md', 40);
+escribir('Beta/node_modules/y/index.js', 600);
+const b = E.medirProyecto(path.join(RAIZ, 'Beta'), { ignorados: ign });
+ok('una carpeta ignorada cuenta como local', b.local === 9000 + 40, String(b.local));
+ok('el código es lo que queda', b.codigo === 100, String(b.codigo));
+ok('un node_modules ignorado sigue siendo dependencia', b.deps === 600, String(b.deps));
+ok('local entra en el total', b.total === 9740, String(b.total));
+ok('sin repo no hay local', E.medirProyecto(path.join(RAIZ, 'Beta'), { ignorados: new Set() }).local === 0);
+
+// Con git de verdad, si la máquina lo tiene.
+let hayGit = true;
+try { execFileSync('git', ['--version'], { windowsHide: true }); } catch { hayGit = false; }
+if (hayGit) {
+  const gama = path.join(RAIZ, 'Gama');
+  escribir('Gama/app.js', 300);
+  escribir('Gama/data/chats/uno.json', 5000);
+  escribir('Gama/.shots/foto.png', 700);
+  fs.writeFileSync(path.join(gama, '.gitignore'), 'data/\n.shots/\n');
+  execFileSync('git', ['init', '-q'], { cwd: gama, windowsHide: true });
+  const g = E.medirProyecto(gama);
+  ok('con git: lo ignorado por .gitignore es local', g.local === 5700, String(g.local));
+  ok('con git: el .gitignore y el código siguen siendo código', g.codigo === 300 + fs.statSync(path.join(gama, '.gitignore')).size, String(g.codigo));
+} else console.log('  (sin git en esta máquina: se saltea la prueba con un repo real)');
 
 function alfaBytes() { return fs.statSync(path.join(RAIZ, 'Alfa', 'package.json')).size; }
 

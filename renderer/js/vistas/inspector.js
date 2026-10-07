@@ -149,7 +149,7 @@ function resumen() {
   const todos = lista();
   const porDisco = new Map();
   for (const p of todos) {
-    if (!porDisco.has(p.disco)) porDisco.set(p.disco, { disco: p.disco, n: 0, tam: { total: 0, codigo: 0, deps: 0, build: 0, git: 0 } });
+    if (!porDisco.has(p.disco)) porDisco.set(p.disco, { disco: p.disco, n: 0, tam: { total: 0, codigo: 0, local: 0, deps: 0, build: 0, git: 0 } });
     const d = porDisco.get(p.disco);
     d.n++;
     if (p.tam) for (const c of ['total', ...CAPAS.map((x) => x.id)]) d.tam[c] += p.tam[c] || 0;

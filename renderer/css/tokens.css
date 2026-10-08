@@ -173,6 +173,22 @@
   --op-scrim: rgb(3 3 4 / .48);
   --op-foot:  rgb(0 0 0 / .16);
 
+  /* ── Lo que flota sobre el contenido: menús y toasts ─────────────────────
+     LA REGLA: lo que flota tiene que quedar del MISMO TONO que las tarjetas
+     que tapa, y eso se MIDE (el color de píxel de los dos en una captura),
+     no se ajusta a ojo. Con solo luz (--op-s3) y blur, sobre una tarjeta
+     quedaban como un vidrio lavado: el doble de claros (tarjeta 25, menú 50,
+     toast 34) y con lo de atrás leyéndose a través. Por eso llevan la luz de
+     una tarjeta (--op-s2) sobre una BASE OSCURA: --op-flota-base dice cuánto
+     tapa. El blur sigue dejando pasar algo del color de abajo.
+     El valor depende de la niebla y de dónde viven las tarjetas: si una app
+     mueve --op-fog o pone la vista en una hoja, vuelve a medir (Nexus, con
+     niebla 2,4 y la vista en una hoja, quedó en 60 %). */
+  --op-flota-base: 90%;
+  --op-flota:
+    linear-gradient(var(--op-s2), var(--op-s2)),
+    color-mix(in srgb, var(--op-bg) var(--op-flota-base), transparent);
+
   /* ── Tipografía ────────────────────────────────────────────────────────────
      Sans para toda la interfaz, mono SOLO para dato exacto: IDs, números,
      rutas, timestamps. El mono en texto corrido se lee técnico de más. */
